@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* Elevate Pay brand guidelines: navy + white core palette, blue accent.
+   Söhne is licensed — it's used when installed (or added via @font-face),
+   otherwise Inter stands in. Söhne weights: Buch 400, Kräftig 500,
+   Halbfett 600, Dreiviertelfett 700, Fett 800. */
+@theme {
+  --color-navy: #0f0f31;
+  --color-navy-700: #2a2a52;
+  --color-brand: #3536fd;
+  --color-brand-dark: #2324d6;
+  --color-brand-50: #eeeeff;
+  --color-brand-100: #dcdcff;
+  --color-canvas: #f6f6fa;
+
+  --font-sans: "Söhne", "Sohne", var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Söhne Mono", "Sohne Mono", var(--font-geist-mono), ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-brand-100);
+  color: var(--color-navy);
+}
