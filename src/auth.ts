@@ -1,10 +1,11 @@
 import NextAuth from "next-auth";
-import Google from "next-auth/providers/google";
+import Credentials from "next-auth/providers/credentials";
 import { db, schema } from "@/lib/db";
 
-// PRD "Privacy, security and data handling" — Access: sign-in restricted to
-// company accounts, two roles in v1 (operator, reader).
-const ALLOWED_DOMAIN = process.env.ALLOWED_GOOGLE_DOMAIN ?? "elevatepay.com";
+// Company-domain emails only; operators listed in OPERATOR_EMAILS.
+const ALLOWED_DOMAIN = process.env.ALLOWED_EMAIL_DOMAIN ??
+  process.env.ALLOWED_GOOGLE_DOMAIN ??
+  "elevatepay.com";
 const OPERATOR_EMAILS = (process.env.OPERATOR_EMAILS ?? "")
   .split(",")
   .map((e) => e.trim().toLowerCase())
@@ -16,15 +17,39 @@ function roleFor(email: string): Role {
   return OPERATOR_EMAILS.includes(email.toLowerCase()) ? "operator" : "reader";
 }
 
+function isAllowedEmail(email: string): boolean {
+  const normalized = email.trim().toLowerCase();
+  const domain = normalized.split("@")[1];
+  return Boolean(domain && domain === ALLOWED_DOMAIN.toLowerCase());
+}
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [Google],
+  trustHost: true,
+  providers: [
+    Credentials({
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        const email = String(credentials?.email ?? "").trim().toLowerCase();
+        const password = String(credentials?.password ?? "");
+        const expected = process.env.AUTH_PASSWORD;
+
+        if (!email || !password || !expected) return null;
+        if (!isAllowedEmail(email)) return null;
+        if (password !== expected) return null;
+
+        const name = email.split("@")[0] ?? email;
+        return { id: email, email, name };
+      },
+    }),
+  ],
   callbacks: {
     async signIn({ user }) {
-      if (!user.email) return false;
-      const email = user.email.toLowerCase();
-      const domain = email.split("@")[1];
-      if (domain !== ALLOWED_DOMAIN.toLowerCase()) return false;
+      if (!user.email || !isAllowedEmail(user.email)) return false;
 
+      const email = user.email.toLowerCase();
       const role = roleFor(email);
       await db
         .insert(schema.operators)

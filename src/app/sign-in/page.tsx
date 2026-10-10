@@ -1,5 +1,10 @@
-import { signIn } from "@/auth";
 import { LogoMark } from "@/components/Logo";
+import SignInForm from "./SignInForm";
+
+const ALLOWED_DOMAIN =
+  process.env.ALLOWED_EMAIL_DOMAIN ??
+  process.env.ALLOWED_GOOGLE_DOMAIN ??
+  "elevatepay.com";
 
 export default function SignInPage() {
   return (
@@ -9,22 +14,10 @@ export default function SignInPage() {
         <h1 className="mt-5 text-2xl font-bold tracking-tight">ElevatePay</h1>
         <p className="text-sm font-medium text-brand">Call Insights</p>
         <p className="mt-4 text-sm text-neutral-600">
-          Restricted to Elevate Pay company Google accounts.
+          Sign in with your <span className="font-medium">@{ALLOWED_DOMAIN}</span> email and the
+          shared team password.
         </p>
-        <form
-          action={async () => {
-            "use server";
-            await signIn("google", { redirectTo: "/" });
-          }}
-          className="mt-6"
-        >
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-dark"
-          >
-            Sign in with Google
-          </button>
-        </form>
+        <SignInForm allowedDomain={ALLOWED_DOMAIN} />
       </div>
     </div>
   );

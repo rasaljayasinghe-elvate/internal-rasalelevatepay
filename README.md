@@ -12,7 +12,7 @@ export) and personal data is redacted before anything reaches a model.
 
 - **App**: Next.js (App Router) on Vercel
 - **Database**: Neon Postgres via Drizzle ORM
-- **Auth**: NextAuth with Google, restricted to one company domain
+- **Auth**: NextAuth (email + shared password), restricted to one company domain
 - **Model**: `extract()` in `src/lib/extract.ts`, switches between Claude and
   Grok via `EXTRACT_PROVIDER` — no code changes to swap providers
 - **Secrets**: environment variables (Doppler recommended for the team)
@@ -21,14 +21,28 @@ export) and personal data is redacted before anything reaches a model.
 
 ```bash
 cp .env.example .env.local
-# fill in DATABASE_URL (a Neon branch), AUTH_SECRET, AUTH_GOOGLE_ID/SECRET,
-# ALLOWED_GOOGLE_DOMAIN, OPERATOR_EMAILS, and one model provider's key
+# fill in DATABASE_URL (a Neon branch), AUTH_SECRET, AUTH_PASSWORD,
+# ALLOWED_EMAIL_DOMAIN, OPERATOR_EMAILS, and one model provider's key
 
 npm install
 npm run db:push    # creates tables from src/lib/db/schema.ts
 npm run db:seed    # optional: a few sample users for local testing
 npm run dev
 ```
+
+### Deploying on Netlify
+
+In **Site configuration → Environment variables**, set at least:
+
+| Variable | Notes |
+| --- | --- |
+| `DATABASE_URL` | Neon Postgres connection string; run `npm run db:push` against it once |
+| `AUTH_SECRET` | `openssl rand -base64 32` or `npx auth secret` |
+| `AUTH_PASSWORD` | Shared team password for sign-in |
+| `ALLOWED_EMAIL_DOMAIN` | e.g. `elevatepay.com` — only `*@domain` can sign in |
+| `OPERATOR_EMAILS` | Comma-separated operator emails |
+
+Redeploy after saving env vars.
 
 Roles: everyone on `ALLOWED_GOOGLE_DOMAIN` can sign in and read; only
 `OPERATOR_EMAILS` can add calls, review/publish, and upload the activity sheet
