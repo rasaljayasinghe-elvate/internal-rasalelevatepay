@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { credentialsLogin } from "@/lib/auth-actions";
 
-export default function SignInForm({ allowedDomain }: { allowedDomain: string }) {
+export default function SignInForm({ allowedDomain }: { allowedDomain?: string }) {
   const [state, formAction, isPending] = useActionState(credentialsLogin, null);
 
   return (
@@ -15,7 +15,7 @@ export default function SignInForm({ allowedDomain }: { allowedDomain: string })
           type="email"
           required
           autoComplete="email"
-          placeholder={`you@${allowedDomain}`}
+          placeholder={allowedDomain ? `you@${allowedDomain}` : "you@company.com"}
           className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-100"
         />
       </label>

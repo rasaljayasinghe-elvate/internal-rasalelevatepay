@@ -1,11 +1,8 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { getAllowedEmailDomain } from "@/lib/allowed-domain";
 import { db, schema } from "@/lib/db";
 
-// Company-domain emails only; operators listed in OPERATOR_EMAILS.
-const ALLOWED_DOMAIN = process.env.ALLOWED_EMAIL_DOMAIN ??
-  process.env.ALLOWED_GOOGLE_DOMAIN ??
-  "elevatepay.com";
 const OPERATOR_EMAILS = (process.env.OPERATOR_EMAILS ?? "")
   .split(",")
   .map((e) => e.trim().toLowerCase())
@@ -18,9 +15,10 @@ function roleFor(email: string): Role {
 }
 
 function isAllowedEmail(email: string): boolean {
-  const normalized = email.trim().toLowerCase();
-  const domain = normalized.split("@")[1];
-  return Boolean(domain && domain === ALLOWED_DOMAIN.toLowerCase());
+  const allowed = getAllowedEmailDomain();
+  if (!allowed) return false;
+  const domain = email.trim().toLowerCase().split("@")[1];
+  return domain === allowed;
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -34,7 +32,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         const email = String(credentials?.email ?? "").trim().toLowerCase();
         const password = String(credentials?.password ?? "");
-        const expected = process.env.AUTH_PASSWORD;
+        const expected = process.env["AUTH_PASSWORD"];
 
         if (!email || !password || !expected) return null;
         if (!isAllowedEmail(email)) return null;

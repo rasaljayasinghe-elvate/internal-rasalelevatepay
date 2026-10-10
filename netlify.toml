@@ -1,0 +1,5 @@
+# ALLOWED_EMAIL_DOMAIN is public config, but Netlify secret scanning flags it when
+# the value is inlined into server bundles. Omit it from the scan (see ntl.fyi/configure-secrets-scanning).
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "ALLOWED_EMAIL_DOMAIN"
+  SECRETS_SCAN_OMIT_PATHS = ".env.example,README.md"

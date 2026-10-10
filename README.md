@@ -39,10 +39,12 @@ In **Site configuration → Environment variables**, set at least:
 | `DATABASE_URL` | Neon Postgres connection string; run `npm run db:push` against it once |
 | `AUTH_SECRET` | `openssl rand -base64 32` or `npx auth secret` |
 | `AUTH_PASSWORD` | Shared team password for sign-in |
-| `ALLOWED_EMAIL_DOMAIN` | e.g. `elevatepay.com` — only `*@domain` can sign in |
+| `ALLOWED_EMAIL_DOMAIN` | e.g. `your-company.com` — only `*@domain` can sign in |
 | `OPERATOR_EMAILS` | Comma-separated operator emails |
 
-Redeploy after saving env vars.
+Redeploy after saving env vars. If Netlify secret scanning fails on
+`ALLOWED_EMAIL_DOMAIN`, either unmark it as a **secret** in the Netlify UI (it is
+not sensitive) or rely on `netlify.toml` `SECRETS_SCAN_OMIT_KEYS` in this repo.
 
 Roles: everyone on `ALLOWED_GOOGLE_DOMAIN` can sign in and read; only
 `OPERATOR_EMAILS` can add calls, review/publish, and upload the activity sheet
