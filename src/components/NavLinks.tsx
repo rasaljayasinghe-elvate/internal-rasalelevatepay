@@ -9,6 +9,8 @@ const LINKS = [
   { href: "/digest", label: "Manager digest", operatorOnly: false },
   { href: "/engineering", label: "Engineering list", operatorOnly: false },
   { href: "/activity", label: "Activity sheet", operatorOnly: false },
+  { href: "/creators", label: "Creators", operatorOnly: false },
+  { href: "/campaigns", label: "Campaigns", operatorOnly: false },
 ];
 
 export default function NavLinks({ isOperator }: { isOperator: boolean }) {
@@ -27,7 +29,7 @@ export default function NavLinks({ isOperator }: { isOperator: boolean }) {
           key={l.href}
           href={l.href}
           className={
-            "whitespace-nowrap rounded-md px-3 py-1.5 text-sm transition-colors " +
+            "whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors " +
             (l.href === active
               ? "bg-brand-50 font-medium text-brand"
               : "text-neutral-600 hover:bg-neutral-100 hover:text-navy")

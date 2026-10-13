@@ -26,7 +26,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${inter.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col bg-canvas text-navy">
         <nav className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 backdrop-blur">
-          <div className="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
+          <div className="mx-auto flex max-w-6xl items-center gap-6 px-4 py-3">
             <Link href="/" className="flex shrink-0 items-center gap-3">
               <Logo />
               <span className="hidden border-l border-neutral-200 pl-3 text-sm text-neutral-500 sm:inline">
@@ -36,7 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <NavLinks isOperator />
           </div>
         </nav>
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
       </body>
     </html>
   );

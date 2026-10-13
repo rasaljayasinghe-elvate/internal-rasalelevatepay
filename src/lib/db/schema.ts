@@ -7,7 +7,9 @@ import {
   date,
   numeric,
   pgEnum,
+  unique,
 } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 // --- Enums -------------------------------------------------------------
 
@@ -140,3 +142,170 @@ export const followUps = pgTable("follow_ups", {
   dueDate: date("due_date"),
   done: boolean("done").notNull().default(false),
 });
+
+// --- Creators and campaigns ---------------------------------------------
+
+export const creatorDecisionEnum = pgEnum("creator_decision", [
+  "buy_now",
+  "test",
+  "rescope",
+  "hold",
+  "skipped",
+]);
+
+export const socialPlatformEnum = pgEnum("social_platform", [
+  "instagram",
+  "tiktok",
+  "facebook",
+  "youtube",
+]);
+
+export const platformFitEnum = pgEnum("platform_fit", [
+  "strong",
+  "ok",
+  "weak",
+  "unverified",
+  "none",
+]);
+
+export const campaignStatusEnum = pgEnum("campaign_status", [
+  "planning",
+  "live",
+  "reviewing",
+  "closed",
+]);
+
+export const bookingStatusEnum = pgEnum("booking_status", [
+  "quoted",
+  "confirmed",
+  "done",
+  "dropped",
+]);
+
+export const deliverableFormatEnum = pgEnum("deliverable_format", [
+  "reel",
+  "video",
+  "story",
+  "post",
+]);
+
+export const deliverableStatusEnum = pgEnum("deliverable_status", [
+  "planned",
+  "live",
+  "missed",
+]);
+
+export const creators = pgTable("creators", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  decision: creatorDecisionEnum("decision").notNull().default("hold"),
+  notes: text("notes"), // condition or reason behind the decision
+  slAudiencePct: numeric("sl_audience_pct"), // share of audience in Sri Lanka, 0–100
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Quoted analytics from the shortlist, not live campaign results.
+export const creatorPlatforms = pgTable("creator_platforms", {
+  id: text("id").primaryKey(),
+  creatorId: text("creator_id")
+    .notNull()
+    .references(() => creators.id, { onDelete: "cascade" }),
+  platform: socialPlatformEnum("platform").notNull(),
+  handle: text("handle"),
+  profileUrl: text("profile_url"),
+  insightsUrl: text("insights_url"), // link to insights screenshots the creator shared
+  followers: integer("followers"),
+  avgViews: integer("avg_views"),
+  engagementPct: numeric("engagement_pct"),
+  fit: platformFitEnum("fit").notNull().default("unverified"),
+});
+
+export const creatorRates = pgTable("creator_rates", {
+  id: text("id").primaryKey(),
+  creatorId: text("creator_id")
+    .notNull()
+    .references(() => creators.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  amountLkr: numeric("amount_lkr"),
+  amountUsd: numeric("amount_usd"),
+  includes: text("includes"),
+});
+
+export const campaigns = pgTable("campaigns", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  status: campaignStatusEnum("status").notNull().default("planning"),
+  startDate: date("start_date"),
+  endDate: date("end_date"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const campaignCreators = pgTable(
+  "campaign_creators",
+  {
+    id: text("id").primaryKey(),
+    campaignId: text("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    creatorId: text("creator_id")
+      .notNull()
+      .references(() => creators.id, { onDelete: "cascade" }),
+    rateId: text("rate_id").references(() => creatorRates.id, { onDelete: "set null" }),
+    agreedLkr: numeric("agreed_lkr"),
+    status: bookingStatusEnum("status").notNull().default("quoted"),
+    signups: integer("signups"),
+    kycCompletions: integer("kyc_completions"),
+    firstDeposits: integer("first_deposits"),
+    notes: text("notes"),
+  },
+  (t) => [unique("campaign_creator_unique").on(t.campaignId, t.creatorId)],
+);
+
+export const deliverables = pgTable("deliverables", {
+  id: text("id").primaryKey(),
+  campaignCreatorId: text("campaign_creator_id")
+    .notNull()
+    .references(() => campaignCreators.id, { onDelete: "cascade" }),
+  platform: socialPlatformEnum("platform").notNull(),
+  format: deliverableFormatEnum("format").notNull(),
+  status: deliverableStatusEnum("status").notNull().default("planned"),
+  dueDate: date("due_date"),
+  postUrl: text("post_url"),
+  insightsUrl: text("insights_url"),
+  views: integer("views"),
+  likes: integer("likes"),
+  comments: integer("comments"),
+});
+
+export const creatorsRelations = relations(creators, ({ many }) => ({
+  platforms: many(creatorPlatforms),
+  rates: many(creatorRates),
+  bookings: many(campaignCreators),
+}));
+
+export const creatorPlatformsRelations = relations(creatorPlatforms, ({ one }) => ({
+  creator: one(creators, { fields: [creatorPlatforms.creatorId], references: [creators.id] }),
+}));
+
+export const creatorRatesRelations = relations(creatorRates, ({ one }) => ({
+  creator: one(creators, { fields: [creatorRates.creatorId], references: [creators.id] }),
+}));
+
+export const campaignsRelations = relations(campaigns, ({ many }) => ({
+  bookings: many(campaignCreators),
+}));
+
+export const campaignCreatorsRelations = relations(campaignCreators, ({ one, many }) => ({
+  campaign: one(campaigns, { fields: [campaignCreators.campaignId], references: [campaigns.id] }),
+  creator: one(creators, { fields: [campaignCreators.creatorId], references: [creators.id] }),
+  rate: one(creatorRates, { fields: [campaignCreators.rateId], references: [creatorRates.id] }),
+  deliverables: many(deliverables),
+}));
+
+export const deliverablesRelations = relations(deliverables, ({ one }) => ({
+  booking: one(campaignCreators, {
+    fields: [deliverables.campaignCreatorId],
+    references: [campaignCreators.id],
+  }),
+}));
