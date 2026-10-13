@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { DataError } from "@/components/DataError";
+import { databaseErrorMessage } from "@/lib/db";
 import { buildEngineeringList } from "@/lib/engineering";
 import { SCORING_FORMULA_LABEL } from "@/lib/scoring";
 
@@ -8,7 +10,13 @@ export const dynamic = "force-dynamic";
 const SEVERITY_LABEL: Record<string, string> = { s1: "S1", s2: "S2", s3: "S3" };
 
 export default async function EngineeringPage() {
-  const groups = await buildEngineeringList();
+  let groups: Awaited<ReturnType<typeof buildEngineeringList>> = [];
+  let loadError: string | null = null;
+  try {
+    groups = await buildEngineeringList();
+  } catch (err) {
+    loadError = databaseErrorMessage(err);
+  }
 
   return (
     <div>
@@ -30,6 +38,11 @@ export default async function EngineeringPage() {
         </div>
       </div>
       <p className="mt-1 text-sm text-neutral-600">{SCORING_FORMULA_LABEL}</p>
+      {loadError && (
+        <div className="mt-4">
+          <DataError message={loadError} />
+        </div>
+      )}
 
       <div className="mt-6 space-y-3">
         {groups.map((g, i) => (
@@ -64,7 +77,7 @@ export default async function EngineeringPage() {
             </ul>
           </div>
         ))}
-        {groups.length === 0 && (
+        {groups.length === 0 && !loadError && (
           <p className="text-sm text-neutral-600">
             No approved issues yet — publish a reviewed call to populate this list.
           </p>

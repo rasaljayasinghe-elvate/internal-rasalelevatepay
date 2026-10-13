@@ -11,7 +11,8 @@ export default function PublishButton({ callId, disabled }: { callId: string; di
     setError(null);
     startTransition(async () => {
       try {
-        await publishCall(callId);
+        const result = await publishCall(callId);
+        if (result.error) setError(result.error);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }

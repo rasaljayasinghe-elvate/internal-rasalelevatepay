@@ -4,7 +4,8 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { requireOperator } from "@/auth";
-import { db, schema } from "./db";
+import { toIsoDate } from "./activity-sheet";
+import { databaseErrorMessage, db, schema } from "./db";
 import { redact, applyManualMasks, summarizeRedactions } from "./redact";
 import { extract } from "./extract";
 import type { ExtractedIssue } from "./extraction-schema";
@@ -25,17 +26,24 @@ export async function createCallFromTranscript(
 ): Promise<{ callId: string } | { error: string }> {
   await requireOperator();
   const userId = input.userId.trim();
-  if (!userId) throw new Error("User ID is required.");
-  if (!input.transcript.trim()) throw new Error("Transcript is empty.");
+  if (!userId) return { error: "User ID is required." };
+  if (!input.transcript.trim()) return { error: "Transcript is empty." };
+  const callDate = toIsoDate(input.callDate);
+  if (!callDate) return { error: "Call date must be a real date." };
 
   const { masked, matches } = redact(input.transcript);
   const fullyMasked = input.manualMasks?.length
     ? applyManualMasks(masked, input.manualMasks)
     : masked;
 
-  const user = await db.query.users.findFirst({
-    where: eq(schema.users.userId, userId),
-  });
+  let user;
+  try {
+    user = await db.query.users.findFirst({
+      where: eq(schema.users.userId, userId),
+    });
+  } catch (err) {
+    return { error: databaseErrorMessage(err) };
+  }
 
   // Returned rather than thrown: production builds hide thrown server action messages.
   let result: Awaited<ReturnType<typeof extract>>;
@@ -45,54 +53,58 @@ export async function createCallFromTranscript(
     return { error: err instanceof Error ? err.message : String(err) };
   }
 
-  // Users not yet in the activity sheet still need a row for the calls FK.
-  if (!user) {
-    await db.insert(schema.users).values({ userId }).onConflictDoNothing();
-  }
-
   const callId = randomUUID();
-  await db.insert(schema.calls).values({
-    id: callId,
-    userId,
-    callDate: input.callDate,
-    rawTranscriptMasked: fullyMasked,
-    redactionNotes: summarizeRedactions(matches),
-    summary: result.extraction.summary,
-    userGoal: result.extraction.userGoal,
-    onboardingStage: result.extraction.onboardingStage,
-    sentiment: result.extraction.sentiment,
-    status: "draft",
-    userActivityAtCall: user?.activity ?? "not_activated",
-    extractPromptVersion: result.promptVersion,
-    createdBy: null,
-  });
+  try {
+    // Users not yet in the activity sheet still need a row for the calls FK.
+    if (!user) {
+      await db.insert(schema.users).values({ userId }).onConflictDoNothing();
+    }
 
-  if (result.extraction.issues.length > 0) {
-    await db.insert(schema.issues).values(
-      result.extraction.issues.map((issue: ExtractedIssue) => ({
-        id: randomUUID(),
-        callId,
-        type: issue.type,
-        productArea: issue.productArea,
-        severity: issue.severity,
-        quote: issue.quote,
-        timestampInCall: issue.timestampInCall,
-        reviewStatus: "pending" as const,
-      })),
-    );
-  }
+    await db.insert(schema.calls).values({
+      id: callId,
+      userId,
+      callDate,
+      rawTranscriptMasked: fullyMasked,
+      redactionNotes: summarizeRedactions(matches),
+      summary: result.extraction.summary,
+      userGoal: result.extraction.userGoal,
+      onboardingStage: result.extraction.onboardingStage,
+      sentiment: result.extraction.sentiment,
+      status: "draft",
+      userActivityAtCall: user?.activity ?? "not_activated",
+      extractPromptVersion: result.promptVersion,
+      createdBy: null,
+    });
 
-  if (result.extraction.followUps.length > 0) {
-    await db.insert(schema.followUps).values(
-      result.extraction.followUps.map((f) => ({
-        id: randomUUID(),
-        callId,
-        action: f.action,
-        owner: f.owner,
-        dueDate: f.dueDate,
-        done: false,
-      })),
-    );
+    if (result.extraction.issues.length > 0) {
+      await db.insert(schema.issues).values(
+        result.extraction.issues.map((issue: ExtractedIssue) => ({
+          id: randomUUID(),
+          callId,
+          type: issue.type,
+          productArea: issue.productArea,
+          severity: issue.severity,
+          quote: issue.quote,
+          timestampInCall: issue.timestampInCall,
+          reviewStatus: "pending" as const,
+        })),
+      );
+    }
+
+    if (result.extraction.followUps.length > 0) {
+      await db.insert(schema.followUps).values(
+        result.extraction.followUps.map((f) => ({
+          id: randomUUID(),
+          callId,
+          action: f.action,
+          owner: f.owner,
+          dueDate: toIsoDate(f.dueDate),
+          done: false,
+        })),
+      );
+    }
+  } catch (err) {
+    return { error: databaseErrorMessage(err) };
   }
 
   revalidatePath("/calls");
@@ -124,20 +136,25 @@ export async function editIssue(
 }
 
 /** Publishes a call once every issue has been reviewed (approved or rejected). */
-export async function publishCall(callId: string) {
+export async function publishCall(callId: string): Promise<{ error?: string }> {
   await requireOperator();
-  const callIssues = await db.query.issues.findMany({
-    where: eq(schema.issues.callId, callId),
-  });
-  const stillPending = callIssues.some((i) => i.reviewStatus === "pending");
-  if (stillPending) {
-    throw new Error("Every issue must be approved or rejected before publishing.");
-  }
+  try {
+    const callIssues = await db.query.issues.findMany({
+      where: eq(schema.issues.callId, callId),
+    });
+    const stillPending = callIssues.some((i) => i.reviewStatus === "pending");
+    if (stillPending) {
+      return { error: "Every issue must be approved or rejected before publishing." };
+    }
 
-  await db.update(schema.calls).set({ status: "published" }).where(eq(schema.calls.id, callId));
+    await db.update(schema.calls).set({ status: "published" }).where(eq(schema.calls.id, callId));
+  } catch (err) {
+    return { error: databaseErrorMessage(err) };
+  }
   revalidatePath("/calls");
   revalidatePath("/engineering");
   revalidatePath("/digest");
+  return {};
 }
 
 export async function toggleFollowUp(followUpId: string, done: boolean) {

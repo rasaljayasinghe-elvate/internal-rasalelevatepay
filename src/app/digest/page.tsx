@@ -1,3 +1,5 @@
+import { DataError } from "@/components/DataError";
+import { databaseErrorMessage } from "@/lib/db";
 import { buildWeeklyDigest, digestToMarkdown } from "@/lib/digest";
 import DigestEditor from "./DigestEditor";
 
@@ -5,8 +7,13 @@ export const dynamic = "force-dynamic";
 
 
 export default async function DigestPage() {
-  const digest = await buildWeeklyDigest();
-  const markdown = digestToMarkdown(digest);
+  let markdown = "";
+  let loadError: string | null = null;
+  try {
+    markdown = digestToMarkdown(await buildWeeklyDigest());
+  } catch (err) {
+    loadError = databaseErrorMessage(err);
+  }
 
   return (
     <div>
@@ -16,7 +23,7 @@ export default async function DigestPage() {
         days. Edit before sending (R7) — posting to Slack/Notion is on the v1
         roadmap (R11).
       </p>
-      <DigestEditor initialMarkdown={markdown} />
+      {loadError ? <div className="mt-4"><DataError message={loadError} /></div> : <DigestEditor initialMarkdown={markdown} />}
     </div>
   );
 }

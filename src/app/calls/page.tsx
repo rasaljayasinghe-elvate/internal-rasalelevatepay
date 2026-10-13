@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSessionUser } from "@/auth";
-import { db } from "@/lib/db";
+import { DataError } from "@/components/DataError";
+import { databaseErrorMessage, db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,14 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default async function CallsPage() {
-  const [calls, user] = await Promise.all([
-    db.query.calls.findMany({ orderBy: (c, { desc }) => desc(c.callDate) }),
-    getSessionUser(),
-  ]);
+  const user = await getSessionUser();
+  let calls: Awaited<ReturnType<typeof db.query.calls.findMany>> = [];
+  let loadError: string | null = null;
+  try {
+    calls = await db.query.calls.findMany({ orderBy: (c, { desc }) => desc(c.callDate) });
+  } catch (err) {
+    loadError = databaseErrorMessage(err);
+  }
   const isOperator = user?.role === "operator";
 
   return (
@@ -32,8 +37,14 @@ export default async function CallsPage() {
         )}
       </div>
 
+      {loadError && (
+        <div className="mt-6">
+          <DataError message={loadError} />
+        </div>
+      )}
+
       <div className="mt-6 divide-y divide-neutral-200 rounded-xl border border-neutral-200 bg-white">
-        {calls.length === 0 && (
+        {calls.length === 0 && !loadError && (
           <p className="p-4 text-sm text-neutral-600">No calls yet.</p>
         )}
         {calls.map((call) => (

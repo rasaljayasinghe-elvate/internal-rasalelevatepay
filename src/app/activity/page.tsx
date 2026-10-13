@@ -1,15 +1,20 @@
 import { getSessionUser } from "@/auth";
-import { db } from "@/lib/db";
+import { DataError } from "@/components/DataError";
+import { databaseErrorMessage, db } from "@/lib/db";
 import UploadForm from "./UploadForm";
 
 export const dynamic = "force-dynamic";
 
 
 export default async function ActivityPage() {
-  const [users, viewer] = await Promise.all([
-    db.query.users.findMany({ orderBy: (u, { desc }) => desc(u.updatedAt) }),
-    getSessionUser(),
-  ]);
+  const viewer = await getSessionUser();
+  let users: Awaited<ReturnType<typeof db.query.users.findMany>> = [];
+  let loadError: string | null = null;
+  try {
+    users = await db.query.users.findMany({ orderBy: (u, { desc }) => desc(u.updatedAt) });
+  } catch (err) {
+    loadError = databaseErrorMessage(err);
+  }
 
   return (
     <div>
@@ -20,6 +25,11 @@ export default async function ActivityPage() {
         payout_count, last_active_date. Rows are matched to users by{" "}
         <code>user_id</code> (R5).
       </p>
+      {loadError && (
+        <div className="mt-4">
+          <DataError message={loadError} />
+        </div>
+      )}
       {viewer?.role === "operator" && <UploadForm />}
 
       <h2 className="mt-8 font-medium">Users ({users.length})</h2>
@@ -46,7 +56,7 @@ export default async function ActivityPage() {
             ))}
           </tbody>
         </table>
-        {users.length === 0 && (
+        {users.length === 0 && !loadError && (
           <p className="p-4 text-sm text-neutral-600">No activity data uploaded yet.</p>
         )}
       </div>

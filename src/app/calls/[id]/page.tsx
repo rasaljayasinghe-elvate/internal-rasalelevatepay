@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getSessionUser } from "@/auth";
-import { db, schema } from "@/lib/db";
+import { DataError } from "@/components/DataError";
+import { databaseErrorMessage, db, schema } from "@/lib/db";
 import IssueCard from "./IssueCard";
 import PublishButton from "./PublishButton";
 
@@ -11,15 +12,44 @@ export const dynamic = "force-dynamic";
 export default async function CallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const call = await db.query.calls.findFirst({ where: eq(schema.calls.id, id) });
+  let call;
+  try {
+    call = await db.query.calls.findFirst({ where: eq(schema.calls.id, id) });
+  } catch (err) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Call</h1>
+        <div className="mt-4">
+          <DataError message={databaseErrorMessage(err)} />
+        </div>
+      </div>
+    );
+  }
   if (!call) notFound();
 
-  const [callIssues, callFollowUps, user, viewer] = await Promise.all([
-    db.query.issues.findMany({ where: eq(schema.issues.callId, id) }),
-    db.query.followUps.findMany({ where: eq(schema.followUps.callId, id) }),
-    db.query.users.findFirst({ where: eq(schema.users.userId, call.userId) }),
-    getSessionUser(),
-  ]);
+  let callIssues;
+  let callFollowUps;
+  let user;
+  let viewer;
+  try {
+    [callIssues, callFollowUps, user, viewer] = await Promise.all([
+      db.query.issues.findMany({ where: eq(schema.issues.callId, id) }),
+      db.query.followUps.findMany({ where: eq(schema.followUps.callId, id) }),
+      db.query.users.findFirst({ where: eq(schema.users.userId, call.userId) }),
+      getSessionUser(),
+    ]);
+  } catch (err) {
+    return (
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {call.userId} — {call.callDate}
+        </h1>
+        <div className="mt-4">
+          <DataError message={databaseErrorMessage(err)} />
+        </div>
+      </div>
+    );
+  }
 
   const pendingCount = callIssues.filter((i) => i.reviewStatus === "pending").length;
   const isOperator = viewer?.role === "operator";

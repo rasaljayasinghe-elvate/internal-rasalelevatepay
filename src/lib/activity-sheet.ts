@@ -43,12 +43,12 @@ export function parseActivityCsv(csv: string): ActivitySheetRow[] {
     header.forEach((h, i) => (row[h] = cells[i]?.trim() ?? ""));
     return {
       userId: row.user_id,
-      signupDate: row.signup_date || undefined,
+      signupDate: toIsoDate(row.signup_date),
       kycStatus: row.kyc_status || undefined,
-      firstDepositDate: row.first_deposit_date || undefined,
+      firstDepositDate: toIsoDate(row.first_deposit_date),
       totalDeposited: toNumeric(row.total_deposited),
-      payoutCount: toNumeric(row.payout_count),
-      lastActiveDate: row.last_active_date || undefined,
+      payoutCount: toInteger(row.payout_count),
+      lastActiveDate: toIsoDate(row.last_active_date),
     };
   }).filter((r) => r.userId);
 }
@@ -56,7 +56,38 @@ export function parseActivityCsv(csv: string): ActivitySheetRow[] {
 // Sheets exports formatted numbers ("$1,500.00"); Postgres numeric wants "1500.00".
 function toNumeric(value: string | undefined): string | undefined {
   const cleaned = value?.replace(/[^0-9.-]/g, "");
-  return cleaned ? cleaned : undefined;
+  if (!cleaned || Number.isNaN(Number(cleaned))) return undefined;
+  return cleaned;
+}
+
+function toInteger(value: string | undefined): string | undefined {
+  const cleaned = toNumeric(value);
+  if (!cleaned) return undefined;
+  return String(Math.trunc(Number(cleaned)));
+}
+
+/** Keep only real calendar dates Postgres will accept. Sheets often uses M/D/YYYY. */
+export function toIsoDate(value: string | undefined): string | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? raw
+    : (() => {
+        const mdy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (!mdy) return undefined;
+        return `${mdy[3]}-${mdy[1].padStart(2, "0")}-${mdy[2].padStart(2, "0")}`;
+      })();
+  if (!iso) return undefined;
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return undefined;
+  }
+  return iso;
 }
 
 function splitCsvLine(line: string): string[] {

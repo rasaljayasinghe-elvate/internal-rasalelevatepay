@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { databaseErrorMessage } from "@/lib/db";
 import { buildEngineeringList, engineeringListToCsv, engineeringListToMarkdown } from "@/lib/engineering";
 
 export async function GET(req: NextRequest) {
   const format = req.nextUrl.searchParams.get("format") === "csv" ? "csv" : "markdown";
-  const groups = await buildEngineeringList();
+  let groups;
+  try {
+    groups = await buildEngineeringList();
+  } catch (err) {
+    return NextResponse.json({ error: databaseErrorMessage(err) }, { status: 503 });
+  }
 
   if (format === "csv") {
     return new NextResponse(engineeringListToCsv(groups), {

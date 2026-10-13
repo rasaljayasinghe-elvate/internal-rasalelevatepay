@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx src/lib/db/seed.ts"
+    "db:seed": "tsx src/lib/db/seed.ts",
+    "db:up": "pg_ctl -D .localdb -l .localdb/log.txt -o \"-p 54329 -k $(pwd)/.localdb\" start"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",
