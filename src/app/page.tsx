@@ -306,6 +306,7 @@ function Dashboard({ data }: { data: DashboardData }) {
                     {" · "}
                     {formatLkr(campaign.spendLkr)}
                     {campaign.signups != null && ` · ${formatCount(campaign.signups)} signups`}
+                    {campaign.lodge && ` · ${campaign.lodge}`}
                   </div>
                 </Link>
               ))}

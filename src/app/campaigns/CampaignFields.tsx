@@ -1,9 +1,11 @@
-import { Select, TextArea, TextInput } from "@/components/fields";
+import { CheckInput, Select, TextArea, TextInput } from "@/components/fields";
 import {
   BOOKING_STATUS_LABEL,
   CAMPAIGN_STATUS_LABEL,
   DELIVERABLE_STATUS_LABEL,
   FORMAT_LABEL,
+  INVOICE_STATUS_LABEL,
+  PAYMENT_STATUS_LABEL,
   PLATFORM_LABEL,
 } from "@/lib/campaigns";
 import type { schema } from "@/lib/db";
@@ -20,6 +22,13 @@ export function CampaignFields({ campaign }: { campaign?: Campaign }) {
       <div />
       <TextInput label="Start date" name="startDate" type="date" defaultValue={campaign?.startDate ?? ""} />
       <TextInput label="End date" name="endDate" type="date" defaultValue={campaign?.endDate ?? ""} />
+      <TextInput
+        label="Metricool brand id"
+        name="metricoolBlogId"
+        defaultValue={campaign?.metricoolBlogId ?? ""}
+        hint="The blogId in the Metricool brand URL."
+        className="sm:col-span-2"
+      />
       <TextArea label="Notes" name="notes" defaultValue={campaign?.notes ?? ""} className="sm:col-span-4" />
     </div>
   );
@@ -34,6 +43,47 @@ export function BookingFields({ booking }: { booking: Booking }) {
       <TextInput label="KYC completions" name="kycCompletions" inputMode="numeric" defaultValue={booking.kycCompletions ?? ""} />
       <TextInput label="First deposits" name="firstDeposits" inputMode="numeric" defaultValue={booking.firstDeposits ?? ""} />
       <TextArea label="Notes" name="notes" rows={2} defaultValue={booking.notes ?? ""} className="sm:col-span-5" />
+    </div>
+  );
+}
+
+export function LodgeFields({ booking }: { booking: Booking }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-4">
+      <div className="flex flex-col justify-end gap-2 sm:col-span-4 sm:flex-row sm:items-center">
+        <CheckInput label="Brief sent" name="briefSent" defaultChecked={booking.briefSent} />
+        <CheckInput label="Draft approved" name="draftApproved" defaultChecked={booking.draftApproved} />
+        <CheckInput label="Posted" name="posted" defaultChecked={booking.posted} />
+      </div>
+      <TextInput label="Go-live" name="goLiveDate" type="date" defaultValue={booking.goLiveDate ?? ""} />
+      <Select
+        label="Invoice"
+        name="invoiceStatus"
+        options={INVOICE_STATUS_LABEL}
+        defaultValue={booking.invoiceStatus}
+      />
+      <Select
+        label="Payment"
+        name="paymentStatus"
+        options={PAYMENT_STATUS_LABEL}
+        defaultValue={booking.paymentStatus ?? ""}
+      />
+      <TextInput label="Paid date" name="paidDate" type="date" defaultValue={booking.paidDate ?? ""} />
+      <TextInput label="Payment ref" name="paymentRef" defaultValue={booking.paymentRef ?? ""} />
+      <TextInput
+        label="Email thread"
+        name="emailUrl"
+        defaultValue={booking.emailUrl ?? ""}
+        className="sm:col-span-3"
+      />
+      <TextArea
+        label="What was agreed"
+        name="deliverableSummary"
+        rows={2}
+        defaultValue={booking.deliverableSummary ?? ""}
+        className="sm:col-span-4"
+      />
+      <TextArea label="Notes" name="notes" rows={2} defaultValue={booking.notes ?? ""} className="sm:col-span-4" />
     </div>
   );
 }

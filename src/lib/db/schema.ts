@@ -6,9 +6,11 @@ import {
   timestamp,
   date,
   numeric,
+  jsonb,
   pgEnum,
   unique,
 } from "drizzle-orm/pg-core";
+import type { MetricoolSnapshot } from "../metricool";
 import { relations } from "drizzle-orm";
 
 // --- Enums -------------------------------------------------------------
@@ -195,6 +197,18 @@ export const deliverableStatusEnum = pgEnum("deliverable_status", [
   "missed",
 ]);
 
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "not_requested",
+  "requested",
+  "received",
+]);
+
+export const paymentStatusEnum = pgEnum("payment_status", [
+  "unpaid",
+  "partially_paid",
+  "paid",
+]);
+
 export const creators = pgTable("creators", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -238,6 +252,9 @@ export const campaigns = pgTable("campaigns", {
   startDate: date("start_date"),
   endDate: date("end_date"),
   notes: text("notes"),
+  // Metricool brand (blogId). The API token stays in the server environment.
+  metricoolBlogId: text("metricool_blog_id"),
+  metricoolSnapshot: jsonb("metricool_snapshot").$type<MetricoolSnapshot | null>(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -258,6 +275,18 @@ export const campaignCreators = pgTable(
     kycCompletions: integer("kyc_completions"),
     firstDeposits: integer("first_deposits"),
     notes: text("notes"),
+    // An agreed creator being produced, as opposed to a quote still on the plan.
+    lodged: boolean("lodged").notNull().default(false),
+    briefSent: boolean("brief_sent").notNull().default(false),
+    draftApproved: boolean("draft_approved").notNull().default(false),
+    posted: boolean("posted").notNull().default(false),
+    goLiveDate: date("go_live_date"),
+    deliverableSummary: text("deliverable_summary"),
+    emailUrl: text("email_url"),
+    invoiceStatus: invoiceStatusEnum("invoice_status").notNull().default("not_requested"),
+    paymentStatus: paymentStatusEnum("payment_status"),
+    paidDate: date("paid_date"),
+    paymentRef: text("payment_ref"),
   },
   (t) => [unique("campaign_creator_unique").on(t.campaignId, t.creatorId)],
 );

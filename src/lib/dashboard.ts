@@ -1,5 +1,5 @@
 import { count, desc, eq, max, sql } from "drizzle-orm";
-import { campaignTotals } from "./campaigns";
+import { campaignTotals, lodgeProgress, lodgeSummary } from "./campaigns";
 import { db, schema } from "./db";
 import { buildEngineeringList } from "./engineering";
 
@@ -64,6 +64,7 @@ export type DashboardData = {
     missed: number;
     spendLkr: number | null;
     signups: number | null;
+    lodge: string | null;
   }[];
   creatorCounts: Record<string, number>;
 };
@@ -240,6 +241,7 @@ export async function loadDashboard(): Promise<DashboardData> {
           missed: totals.missed,
           spendLkr: totals.spendLkr,
           signups: totals.signups,
+          lodge: lodgeSummary(lodgeProgress(campaign.bookings)),
         };
       })
       .sort((a, b) => statusRank[a.status] - statusRank[b.status])

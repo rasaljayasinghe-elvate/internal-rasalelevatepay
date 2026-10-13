@@ -2,6 +2,7 @@
 // plus the Sri Lanka creator shortlist (decision paper, data as of
 // 12 October 2026) and its buy-now campaign. Fixed ids make it safe to
 // re-run. Run with: npx tsx src/lib/db/seed.ts
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db, schema } from "./index";
 
 type Platform = (typeof schema.socialPlatformEnum.enumValues)[number];
@@ -368,7 +369,7 @@ async function seedCampaign() {
       status: "planning",
       notes:
         "Buy-now set from the 12 Oct shortlist: Hesara, Viren and Lelumi (LKR 320,000, about $968). " +
-        "Tests to add once scope and rates are confirmed: Anderson, Navidi, Sanuliya (LKR 430,000). " +
+        "Hesara and Navidi are lodged for a 27 Oct go-live. Tests still to confirm: Anderson and Sanuliya. " +
         "Review after week 1 on signups, cost per signup, KYC completion and first deposits.",
     })
     .onConflictDoNothing();
@@ -399,6 +400,118 @@ async function seedCampaign() {
         })),
       )
       .onConflictDoNothing();
+  }
+
+  await lodgeActiveDeals();
+}
+
+// Deals already agreed in the Active campaigns board. Re-running the seed
+// does not overwrite a creator who has already been lodged.
+const ACTIVE_DEALS: {
+  creatorId: string;
+  rateKey: string;
+  agreedLkr: number;
+  goLiveDate: string;
+  deliverableSummary: string;
+  emailUrl: string;
+  notes: string;
+  posts: { platform: Platform; format: "reel" | "video" }[];
+}[] = [
+  {
+    creatorId: "cr_hesara",
+    rateKey: "pkg",
+    agreedLkr: 160_000,
+    goLiveDate: "2026-10-27",
+    deliverableSummary: "All-in package across 3 platforms. The welcome email does not list the exact pieces.",
+    emailUrl:
+      "https://mail.google.com/mail/?authuser=rasal.jayasinghe@elevatepay.co#all/thread-a:r5136523844929373491",
+    notes:
+      "Welcome aboard email of 12 Oct 2026 agrees LKR 160,000 for 3 platforms and asks for an invoice and bank details. The email says 50% upfront, which conflicts with the 100% upfront rule. There is no payment evidence, and the brief is not in the thread.",
+    posts: [
+      { platform: "tiktok", format: "video" },
+      { platform: "instagram", format: "reel" },
+      { platform: "facebook", format: "reel" },
+    ],
+  },
+  {
+    creatorId: "cr_navidi",
+    rateKey: "pkg",
+    agreedLkr: 100_000,
+    goLiveDate: "2026-10-27",
+    deliverableSummary: "Instagram and TikTok. The welcome email does not list the exact pieces.",
+    emailUrl:
+      "https://mail.google.com/mail/?authuser=rasal.jayasinghe@elevatepay.co#all/thread-a:r-5083077633155228057",
+    notes:
+      "Welcome aboard email of 13 Oct 2026 agrees LKR 100,000 for Instagram and TikTok and asks for an invoice and bank details. The email says 50% upfront, which conflicts with the 100% upfront rule. There is no payment evidence.",
+    posts: [
+      { platform: "instagram", format: "reel" },
+      { platform: "tiktok", format: "video" },
+    ],
+  },
+];
+
+async function lodgeActiveDeals() {
+  await db
+    .update(schema.campaigns)
+    .set({
+      startDate: sql`coalesce(${schema.campaigns.startDate}, '2026-10-12')`,
+      endDate: sql`coalesce(${schema.campaigns.endDate}, '2026-10-27')`,
+      notes: sql`replace(${schema.campaigns.notes}, 'Tests to add once scope and rates are confirmed: Anderson, Navidi, Sanuliya (LKR 430,000). ', 'Hesara and Navidi are lodged for a 27 Oct go-live. Tests still to confirm: Anderson and Sanuliya. ')`,
+    })
+    .where(eq(schema.campaigns.id, CAMPAIGN_ID));
+
+  for (const deal of ACTIVE_DEALS) {
+    const existing = await db.query.campaignCreators.findFirst({
+      where: and(
+        eq(schema.campaignCreators.campaignId, CAMPAIGN_ID),
+        eq(schema.campaignCreators.creatorId, deal.creatorId),
+      ),
+    });
+    const fields = {
+      lodged: true,
+      status: "confirmed" as const,
+      agreedLkr: String(deal.agreedLkr),
+      rateId: `${deal.creatorId}_rate_${deal.rateKey}`,
+      goLiveDate: deal.goLiveDate,
+      deliverableSummary: deal.deliverableSummary,
+      emailUrl: deal.emailUrl,
+      invoiceStatus: "requested" as const,
+      briefSent: false,
+      draftApproved: false,
+      posted: false,
+      notes: deal.notes,
+    };
+    const bookingId = existing?.id ?? `${CAMPAIGN_ID}_${deal.creatorId}`;
+    if (!existing) {
+      await db.insert(schema.campaignCreators).values({
+        id: bookingId,
+        campaignId: CAMPAIGN_ID,
+        creatorId: deal.creatorId,
+        ...fields,
+      });
+    } else if (!existing.lodged) {
+      await db.update(schema.campaignCreators).set(fields).where(eq(schema.campaignCreators.id, existing.id));
+    } else {
+      continue;
+    }
+
+    await db
+      .insert(schema.deliverables)
+      .values(
+        deal.posts.map((post) => ({
+          id: `${CAMPAIGN_ID}_${deal.creatorId}_${post.platform}`,
+          campaignCreatorId: bookingId,
+          platform: post.platform,
+          format: post.format,
+          status: "planned" as const,
+          dueDate: deal.goLiveDate,
+        })),
+      )
+      .onConflictDoNothing();
+    await db
+      .update(schema.deliverables)
+      .set({ dueDate: deal.goLiveDate })
+      .where(and(eq(schema.deliverables.campaignCreatorId, bookingId), isNull(schema.deliverables.dueDate)));
   }
 }
 

@@ -8,8 +8,11 @@ import {
   addDeliverable,
   deleteCampaign,
   deleteDeliverable,
+  refreshMetricool,
   removeBooking,
+  saveLodge,
   setDeliverableStatus,
+  unlodgeBooking,
   updateBooking,
   updateCampaign,
   updateDeliverable,
@@ -24,15 +27,22 @@ import {
   DELIVERABLE_STATUS_LABEL,
   DELIVERABLE_STATUS_STYLE,
   FORMAT_LABEL,
+  INVOICE_STATUS_LABEL,
+  INVOICE_STATUS_STYLE,
+  PAYMENT_STATUS_LABEL,
+  PAYMENT_STATUS_STYLE,
   PLATFORM_LABEL,
   bookingMetrics,
   campaignTotals,
   dateRange,
   formatCount,
   formatLkr,
+  lodgeProgress,
+  lodgeSummary,
 } from "@/lib/campaigns";
+import { metricoolConfig } from "@/lib/metricool";
 import { databaseErrorMessage, db, schema } from "@/lib/db";
-import { BookingFields, CampaignFields, DeliverableFields } from "../CampaignFields";
+import { BookingFields, CampaignFields, DeliverableFields, LodgeFields } from "../CampaignFields";
 import AddBookingForm from "./AddBookingForm";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +89,8 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
   if (!campaign) notFound();
 
   const totals = campaignTotals(campaign.bookings);
+  const lodge = lodgeProgress(campaign.bookings);
+  const metricool = metricoolConfig();
   const bookings = [...campaign.bookings].sort(
     (a, b) =>
       Number(a.status === "dropped") - Number(b.status === "dropped") ||
@@ -134,10 +146,25 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         <Total label="KYC completions" value={formatCount(totals.kycCompletions)} />
         <Total label="First deposits" value={formatCount(totals.firstDeposits)} />
       </div>
+      {lodge.lodged > 0 && (
+        <p className="mt-3 text-sm text-neutral-700">
+          {lodge.lodged} lodged · {lodgeSummary(lodge)} · {lodge.draftApproved} drafts approved
+          {lodge.invoicesOut > 0 && ` · ${lodge.invoicesOut} invoices requested`}
+          {lodge.unpaid > 0 && ` · ${lodge.unpaid} not marked paid`}
+        </p>
+      )}
       <p className="mt-2 text-xs text-neutral-500">
         Views count live posts only. Cost per 1K views and per signup use the spend of creators
-        who have those results so far. Dropped creators are left out. Results are typed in by hand.
+        who have those results so far. Dropped creators are left out. Post counts are typed in.
+        Metricool, when connected, adds the brand totals for these dates underneath.
       </p>
+
+      <MetricoolPanel
+        campaignId={campaign.id}
+        blogId={campaign.metricoolBlogId}
+        configured={metricool.configured}
+        snapshot={campaign.metricoolSnapshot}
+      />
 
       {bookings.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded-xl border border-neutral-200 bg-white">
@@ -205,11 +232,63 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
                 </div>
                 {b.notes && <p className="mt-1 whitespace-pre-line text-sm text-neutral-700">{b.notes}</p>}
               </div>
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                {b.lodged && <Badge className="bg-navy text-white">Lodged</Badge>}
                 <Badge className={DECISION_STYLE[b.creator.decision]}>{DECISION_LABEL[b.creator.decision]}</Badge>
                 <Badge className="bg-neutral-100 text-neutral-700">{BOOKING_STATUS_LABEL[b.status]}</Badge>
               </div>
             </div>
+
+            {b.lodged && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <Badge className={b.briefSent ? "bg-green-100 text-green-800" : "bg-neutral-100 text-neutral-600"}>
+                  {b.briefSent ? "Brief sent" : "Brief not sent"}
+                </Badge>
+                <Badge className={b.draftApproved ? "bg-green-100 text-green-800" : "bg-neutral-100 text-neutral-600"}>
+                  {b.draftApproved ? "Draft approved" : "Draft open"}
+                </Badge>
+                <Badge className={b.posted ? "bg-green-100 text-green-800" : "bg-neutral-100 text-neutral-600"}>
+                  {b.posted ? "Posted" : "Not posted"}
+                </Badge>
+                <Badge className={INVOICE_STATUS_STYLE[b.invoiceStatus]}>
+                  Invoice {INVOICE_STATUS_LABEL[b.invoiceStatus].toLowerCase()}
+                </Badge>
+                <Badge className={b.paymentStatus ? PAYMENT_STATUS_STYLE[b.paymentStatus] : "bg-neutral-100 text-neutral-600"}>
+                  {b.paymentStatus ? PAYMENT_STATUS_LABEL[b.paymentStatus] : "Payment unknown"}
+                </Badge>
+                {b.goLiveDate && <span className="text-neutral-500">Go-live {b.goLiveDate}</span>}
+                <ExternalLink href={b.emailUrl}>Email</ExternalLink>
+              </div>
+            )}
+            {b.lodged && b.deliverableSummary && (
+              <p className="mt-2 text-sm text-neutral-700">{b.deliverableSummary}</p>
+            )}
+
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm text-brand">
+                {b.lodged ? "Edit lodge" : "Lodge this creator"}
+              </summary>
+              <p className="mt-2 text-sm text-neutral-600">
+                Record the agreed fee as in production: brief, draft, post, invoice and payment.
+                Saving confirms a quote.
+              </p>
+              <ActionForm action={saveLodge} submitLabel={b.lodged ? "Save lodge" : "Lodge creator"} className="mt-3">
+                <input type="hidden" name="id" value={b.id} />
+                <LodgeFields booking={b} />
+              </ActionForm>
+              {b.lodged && (
+                <ActionForm
+                  action={unlodgeBooking}
+                  submitLabel="Take off the lodge"
+                  pendingLabel="Saving…"
+                  variant="secondary"
+                  compact
+                  className="mt-2"
+                >
+                  <input type="hidden" name="id" value={b.id} />
+                </ActionForm>
+              )}
+            </details>
 
             <details className="mt-3">
               <summary className="cursor-pointer text-sm text-brand">Edit booking and results</summary>
@@ -325,6 +404,70 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
         </ActionForm>
       </details>
     </div>
+  );
+}
+
+function MetricoolPanel({
+  campaignId,
+  blogId,
+  configured,
+  snapshot,
+}: {
+  campaignId: string;
+  blogId: string | null;
+  configured: boolean;
+  snapshot: {
+    syncedAt: string;
+    from: string;
+    to: string;
+    series: { network: string; metric: string; total: number }[];
+    error?: string;
+  } | null;
+}) {
+  return (
+    <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-medium">Metricool</h2>
+          <p className="mt-1 max-w-2xl text-sm text-neutral-600">
+            Refresh pulls the connected brand&apos;s analytics for this campaign&apos;s dates.
+            Those numbers are the brand account, not the views on a creator&apos;s post. Paste each
+            post link below and type its views until the post is on a brand Metricool can read.
+          </p>
+        </div>
+        <ActionForm action={refreshMetricool} submitLabel="Refresh" pendingLabel="Refreshing…" variant="secondary" compact>
+          <input type="hidden" name="id" value={campaignId} />
+        </ActionForm>
+      </div>
+      {!configured && (
+        <p className="mt-3 text-sm text-amber-800">
+          Not connected. Set METRICOOL_TOKEN and METRICOOL_USER_ID on the server. The token is in
+          Metricool under Account settings → API, and API access needs the Advanced plan.
+        </p>
+      )}
+      {configured && !blogId && (
+        <p className="mt-3 text-sm text-neutral-600">
+          Add the brand id in Edit campaign, or set METRICOOL_BLOG_ID. It is the blogId in the brand URL.
+        </p>
+      )}
+      {snapshot && (
+        <div className="mt-3 text-sm text-neutral-700">
+          <p>
+            Last refresh {snapshot.syncedAt.slice(0, 16).replace("T", " ")} UTC · {snapshot.from} to {snapshot.to}
+          </p>
+          {snapshot.series.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {snapshot.series.map((point) => (
+                <li key={`${point.network}-${point.metric}`} className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium">
+                  {point.network} {point.metric} {formatCount(point.total)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {snapshot.error && <p className="mt-2 text-red-700">{snapshot.error}</p>}
+        </div>
+      )}
+    </section>
   );
 }
 

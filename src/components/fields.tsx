@@ -73,6 +73,23 @@ export function Select({
   );
 }
 
+export function CheckInput({
+  label,
+  name,
+  defaultChecked,
+}: {
+  label: string;
+  name: string;
+  defaultChecked?: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input type="checkbox" name={name} defaultChecked={defaultChecked} className="size-4 accent-brand" />
+      {label}
+    </label>
+  );
+}
+
 export function Badge({ className, children }: { className: string; children: React.ReactNode }) {
   return (
     <span className={"whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium " + className}>

@@ -83,6 +83,68 @@ export const DELIVERABLE_STATUS_STYLE: Record<string, string> = {
   missed: "bg-red-100 text-red-800",
 };
 
+export const INVOICE_STATUS_LABEL: Record<string, string> = {
+  not_requested: "Not requested",
+  requested: "Requested",
+  received: "Received",
+};
+
+export const INVOICE_STATUS_STYLE: Record<string, string> = {
+  not_requested: "bg-neutral-100 text-neutral-700",
+  requested: "bg-amber-100 text-amber-800",
+  received: "bg-green-100 text-green-800",
+};
+
+export const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  "": "Unknown",
+  unpaid: "Unpaid",
+  partially_paid: "Partially paid",
+  paid: "Paid",
+};
+
+export const PAYMENT_STATUS_STYLE: Record<string, string> = {
+  unpaid: "bg-red-100 text-red-800",
+  partially_paid: "bg-amber-100 text-amber-800",
+  paid: "bg-green-100 text-green-800",
+};
+
+type LodgeBooking = {
+  status: string;
+  lodged: boolean;
+  briefSent: boolean;
+  draftApproved: boolean;
+  posted: boolean;
+  invoiceStatus: string;
+  paymentStatus: string | null;
+};
+
+export type LodgeProgress = {
+  lodged: number;
+  briefSent: number;
+  draftApproved: number;
+  posted: number;
+  invoicesOut: number;
+  unpaid: number;
+};
+
+/** Counts for creators who have been lodged onto the campaign. */
+export function lodgeProgress(bookings: LodgeBooking[]): LodgeProgress {
+  const rows = bookings.filter((b) => b.lodged && b.status !== "dropped");
+  return {
+    lodged: rows.length,
+    briefSent: rows.filter((b) => b.briefSent).length,
+    draftApproved: rows.filter((b) => b.draftApproved).length,
+    posted: rows.filter((b) => b.posted).length,
+    invoicesOut: rows.filter((b) => b.invoiceStatus === "requested").length,
+    unpaid: rows.filter((b) => b.paymentStatus !== "paid").length,
+  };
+}
+
+export function lodgeSummary(progress: LodgeProgress): string | null {
+  if (progress.lodged === 0) return null;
+  return `${progress.briefSent}/${progress.lodged} briefed · ${progress.posted}/${progress.lodged} posted`;
+}
+
 type DeliverableLike = { status: string; views: number | null };
 type BookingLike = {
   status: string;

@@ -3,10 +3,11 @@
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { requireOperator } from "@/auth";
 import { toIsoDate } from "./activity-sheet";
 import { databaseErrorMessage, db, schema } from "./db";
+import { metricoolConfig, pullBrandTotals } from "./metricool";
 
 // Every action takes (previous state, FormData) so forms can use
 // useActionState and show the returned error. Errors are returned, not
@@ -76,6 +77,23 @@ function link(fd: FormData, name: string, label: string): string | null {
   throw new InputError(`${label} must be a web link.`);
 }
 
+function checked(fd: FormData, name: string): boolean {
+  const v = fd.get(name);
+  return v === "on" || v === "true" || v === "1";
+}
+
+function optionalOneOf<T extends string>(
+  fd: FormData,
+  name: string,
+  values: readonly T[],
+  label: string,
+): T | null {
+  const v = text(fd, name);
+  if (!v) return null;
+  if (!(values as readonly string[]).includes(v)) throw new InputError(`Pick a valid ${label}.`);
+  return v as T;
+}
+
 async function run(work: () => Promise<void>, paths: string[]): Promise<ActionState> {
   await requireOperator();
   try {
@@ -96,6 +114,8 @@ const CAMPAIGN_STATUSES = schema.campaignStatusEnum.enumValues;
 const BOOKING_STATUSES = schema.bookingStatusEnum.enumValues;
 const FORMATS = schema.deliverableFormatEnum.enumValues;
 const DELIVERABLE_STATUSES = schema.deliverableStatusEnum.enumValues;
+const INVOICE_STATUSES = schema.invoiceStatusEnum.enumValues;
+const PAYMENT_STATUSES = schema.paymentStatusEnum.enumValues;
 
 // --- Creators -------------------------------------------------------------
 
@@ -218,12 +238,17 @@ function campaignFields(fd: FormData) {
   if (startDate && endDate && endDate < startDate) {
     throw new InputError("End date is before the start date.");
   }
+  const blogId = text(fd, "metricoolBlogId");
+  if (blogId && !/^\d+$/.test(blogId)) {
+    throw new InputError("Metricool brand id is the number in the brand URL.");
+  }
   return {
     name: required(fd, "name", "Name"),
     status: oneOf(fd, "status", CAMPAIGN_STATUSES, "status"),
     startDate,
     endDate,
     notes: text(fd, "notes"),
+    metricoolBlogId: blogId,
   };
 }
 
@@ -289,6 +314,111 @@ export async function addBooking(_: ActionState, fd: FormData): Promise<ActionSt
       status: "quoted",
     });
   }, ["/campaigns", "/creators"]);
+}
+
+function lodgeFields(fd: FormData) {
+  const goLiveDate = isoDate(fd, "goLiveDate", "Go-live date");
+  const paidDate = isoDate(fd, "paidDate", "Paid date");
+  return {
+    briefSent: checked(fd, "briefSent"),
+    draftApproved: checked(fd, "draftApproved"),
+    posted: checked(fd, "posted"),
+    goLiveDate,
+    deliverableSummary: text(fd, "deliverableSummary"),
+    emailUrl: link(fd, "emailUrl", "Email thread"),
+    invoiceStatus: oneOf(fd, "invoiceStatus", INVOICE_STATUSES, "invoice status"),
+    paymentStatus: optionalOneOf(fd, "paymentStatus", PAYMENT_STATUSES, "payment status"),
+    paidDate,
+    paymentRef: text(fd, "paymentRef"),
+    notes: text(fd, "notes"),
+  };
+}
+
+/** Records a creator as agreed and in production: brief, draft, post, invoice, payment. */
+export async function saveLodge(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = required(fd, "id", "Booking");
+    const booking = await db.query.campaignCreators.findFirst({
+      where: eq(schema.campaignCreators.id, id),
+    });
+    if (!booking) throw new InputError("That creator is not on this campaign.");
+
+    const fields = lodgeFields(fd);
+    await db
+      .update(schema.campaignCreators)
+      .set({
+        ...fields,
+        lodged: true,
+        status: booking.status === "quoted" ? "confirmed" : booking.status,
+      })
+      .where(eq(schema.campaignCreators.id, id));
+
+    if (fields.goLiveDate) {
+      await db
+        .update(schema.deliverables)
+        .set({ dueDate: fields.goLiveDate })
+        .where(and(eq(schema.deliverables.campaignCreatorId, id), isNull(schema.deliverables.dueDate)));
+    }
+  }, ["/", "/campaigns", "/creators"]);
+}
+
+export async function unlodgeBooking(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    await db
+      .update(schema.campaignCreators)
+      .set({ lodged: false })
+      .where(eq(schema.campaignCreators.id, required(fd, "id", "Booking")));
+  }, ["/", "/campaigns"]);
+}
+
+export async function refreshMetricool(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(async () => {
+    const id = required(fd, "id", "Campaign");
+    const config = metricoolConfig();
+    if (!config.configured) {
+      throw new InputError(
+        "Add METRICOOL_TOKEN and METRICOOL_USER_ID on the server. The token is in Metricool under Account settings, API.",
+      );
+    }
+
+    const campaign = await db.query.campaigns.findFirst({
+      where: eq(schema.campaigns.id, id),
+      with: { bookings: { with: { deliverables: true } } },
+    });
+    if (!campaign) throw new InputError("Campaign not found.");
+
+    const blogId = campaign.metricoolBlogId || config.blogId;
+    if (!blogId) {
+      throw new InputError("Add the Metricool brand id on this campaign. It is the blogId in the brand URL.");
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const goLives = campaign.bookings
+      .map((b) => b.goLiveDate)
+      .filter((d): d is string => !!d)
+      .sort();
+    const from = campaign.startDate ?? goLives[0] ?? addIsoDays(today, -30);
+    const end = campaign.endDate ?? goLives.at(-1) ?? today;
+    const to = end < today ? end : today;
+    const networks = [
+      ...new Set(
+        campaign.bookings
+          .filter((b) => b.status !== "dropped")
+          .flatMap((b) => b.deliverables.map((d) => d.platform)),
+      ),
+    ];
+
+    const snapshot = await pullBrandTotals({ blogId, from, to: to < from ? from : to, networks });
+    await db.update(schema.campaigns).set({ metricoolSnapshot: snapshot }).where(eq(schema.campaigns.id, id));
+    if (snapshot.error && snapshot.series.length === 0) throw new InputError(snapshot.error);
+  }, ["/", "/campaigns"]);
+}
+
+function addIsoDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 export async function updateBooking(_: ActionState, fd: FormData): Promise<ActionState> {
