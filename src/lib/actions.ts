@@ -23,7 +23,7 @@ export type CreateCallInput = {
 export async function createCallFromTranscript(
   input: CreateCallInput,
 ): Promise<{ callId: string } | { error: string }> {
-  const operator = await requireOperator();
+  await requireOperator();
   const userId = input.userId.trim();
   if (!userId) throw new Error("User ID is required.");
   if (!input.transcript.trim()) throw new Error("Transcript is empty.");
@@ -64,7 +64,7 @@ export async function createCallFromTranscript(
     status: "draft",
     userActivityAtCall: user?.activity ?? "not_activated",
     extractPromptVersion: result.promptVersion,
-    createdBy: operator.email,
+    createdBy: null,
   });
 
   if (result.extraction.issues.length > 0) {

@@ -4,7 +4,7 @@ Turns ~10 weekly user calls into structured summaries, a weekly manager
 digest, and a ranked issue list for engineering. See the PRD this was built
 from for the full picture; this README covers running it locally.
 
-Version 1 is for one operator and two readers (manager, engineering).
+Version 1 is open to the team (manager, engineering, and whoever pastes the calls).
 Transcripts are pasted in by hand (Granola is on the free plan, no API
 export) and personal data is redacted before anything reaches a model.
 
@@ -12,7 +12,6 @@ export) and personal data is redacted before anything reaches a model.
 
 - **App**: Next.js (App Router) on Vercel
 - **Database**: Neon Postgres via Drizzle ORM
-- **Auth**: NextAuth (email + shared password), restricted to one company domain
 - **Model**: `extract()` in `src/lib/extract.ts`, switches between Claude and
   Grok via `EXTRACT_PROVIDER` — no code changes to swap providers
 - **Secrets**: environment variables (Doppler recommended for the team)
@@ -21,8 +20,7 @@ export) and personal data is redacted before anything reaches a model.
 
 ```bash
 cp .env.example .env.local
-# fill in DATABASE_URL (a Neon branch), AUTH_SECRET, AUTH_PASSWORD,
-# ALLOWED_EMAIL_DOMAIN, OPERATOR_EMAILS, and one model provider's key
+# fill in DATABASE_URL (a Neon branch) and one model provider's key
 
 npm install
 npm run db:push    # creates tables from src/lib/db/schema.ts
@@ -37,18 +35,9 @@ In **Site configuration → Environment variables**, set at least:
 | Variable | Notes |
 | --- | --- |
 | `DATABASE_URL` | Neon Postgres connection string; run `npm run db:push` against it once |
-| `AUTH_SECRET` | `openssl rand -base64 32` or `npx auth secret` |
-| `AUTH_PASSWORD` | Shared team password for sign-in |
-| `ALLOWED_EMAIL_DOMAIN` | e.g. `your-company.com` — only `*@domain` can sign in |
-| `OPERATOR_EMAILS` | Comma-separated operator emails |
 
-Redeploy after saving env vars. If Netlify secret scanning fails on
-`ALLOWED_EMAIL_DOMAIN`, either unmark it as a **secret** in the Netlify UI (it is
-not sensitive) or rely on `netlify.toml` `SECRETS_SCAN_OMIT_KEYS` in this repo.
-
-Roles: everyone on `ALLOWED_GOOGLE_DOMAIN` can sign in and read; only
-`OPERATOR_EMAILS` can add calls, review/publish, and upload the activity sheet
-(enforced in `src/lib/actions.ts` and the upload route, not just hidden in the UI).
+Redeploy after saving env vars. The app is open — there is no sign-in. Anyone
+with the URL can add calls, review and publish, and upload the activity sheet.
 
 ## Brand
 
