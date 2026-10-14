@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DataError } from "@/components/DataError";
+import FollowUpDone from "@/components/FollowUpDone";
 import { COHORT_LABEL } from "@/lib/activity-sheet";
 import { Badge } from "@/components/fields";
 import {
@@ -72,103 +73,46 @@ export default async function Home() {
 }
 
 function Dashboard({ data }: { data: DashboardData }) {
-  const attention = attentionItems(data);
   const sheetStale = data.snapshotAgeDays == null || data.snapshotAgeDays > 7;
   const creatorTotal = Object.values(data.creatorCounts).reduce((sum, n) => sum + n, 0);
+  const notes = weekNotes(data, sheetStale);
 
   return (
     <>
-      <section className="mt-5 overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-        <div className="grid min-[880px]:grid-cols-[1.35fr_1fr]">
-          <div className="p-5 sm:p-6">
-            <p className="text-sm text-neutral-500">Since {formatDay(data.periodStart)}</p>
-            <p className="mt-2 flex items-baseline gap-2">
-              <span className="text-4xl font-semibold tabular-nums tracking-tight">
-                {data.callsInPeriod}
+      <section className="mt-5 rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6">
+        <p className="text-sm text-neutral-500">Since {formatDay(data.periodStart)}</p>
+        <p className="mt-2 flex items-baseline gap-2">
+          <span className="text-4xl font-semibold tabular-nums tracking-tight">
+            {data.callsInPeriod}
+          </span>
+          <span className="text-neutral-500">of {WEEKLY_CALL_TARGET} calls</span>
+        </p>
+        <div
+          className="mt-4 flex max-w-xl gap-1.5"
+          role="img"
+          aria-label={`${data.callsInPeriod} of ${WEEKLY_CALL_TARGET} calls in the last 7 days`}
+        >
+          {Array.from({ length: WEEKLY_CALL_TARGET }, (_, i) => (
+            <span
+              key={i}
+              className={
+                "h-2 flex-1 rounded-full " + (i < data.callsInPeriod ? "bg-brand" : "bg-neutral-200")
+              }
+            />
+          ))}
+        </div>
+        {notes.length > 0 && (
+          <p className="mt-3 text-sm text-neutral-600">
+            {notes.map((note, index) => (
+              <span key={note.href}>
+                {index > 0 && " · "}
+                <Link href={note.href} className="hover:text-brand">
+                  {note.text}
+                </Link>
               </span>
-              <span className="text-neutral-500">of {WEEKLY_CALL_TARGET} calls</span>
-            </p>
-            <div
-              className="mt-4 flex gap-1.5"
-              role="img"
-              aria-label={`${data.callsInPeriod} of ${WEEKLY_CALL_TARGET} calls in the last 7 days`}
-            >
-              {Array.from({ length: WEEKLY_CALL_TARGET }, (_, i) => (
-                <span
-                  key={i}
-                  className={
-                    "h-2 flex-1 rounded-full " + (i < data.callsInPeriod ? "bg-brand" : "bg-neutral-200")
-                  }
-                />
-              ))}
-            </div>
-            <p className="mt-3 max-w-md text-sm text-neutral-600">
-              Published calls are the only ones that reach the manager digest and the engineering list.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 border-t border-neutral-200 min-[880px]:border-t-0 min-[880px]:border-l">
-            <Stat
-              href="/digest"
-              label="Published"
-              value={String(data.publishedInPeriod)}
-              hint="in the digest window"
-              className="border-r border-b"
-            />
-            <Stat
-              href="/calls"
-              label="Unpublished"
-              value={String(data.openCount)}
-              hint={
-                data.openCount === 0
-                  ? "none waiting"
-                  : data.readyToPublish.length > 0
-                    ? `${data.readyToPublish.length} ready to publish`
-                    : "still in review"
-              }
-              className="border-b"
-            />
-            <Stat
-              href="/engineering"
-              label="Ranked issues"
-              value={String(data.rankedIssues)}
-              hint={
-                data.topIssues[0]
-                  ? `Top score ${data.topIssues[0].score.toFixed(1)}`
-                  : "Publish a call to rank"
-              }
-              className="border-r"
-            />
-            <Stat
-              href="/activity"
-              label="Activity sheet"
-              value={data.snapshotDate ? formatDay(data.snapshotDate) : "None"}
-              hint={data.userCount === 0 ? "Not uploaded" : ageLabel(data.snapshotAgeDays)}
-              hintClassName={sheetStale ? "text-amber-800" : undefined}
-            />
-          </div>
-        </div>
-
-        <div className="border-t border-neutral-200">
-          {attention.length === 0 ? (
-            <p className="px-5 py-3 text-sm text-neutral-600">Nothing is waiting on review.</p>
-          ) : (
-            <ul>
-              {attention.map((item) => (
-                <li key={item.text} className="border-t border-neutral-100 first:border-t-0">
-                  <Link
-                    href={item.href}
-                    className="flex items-center gap-3 px-5 py-2.5 text-sm hover:bg-neutral-50"
-                  >
-                    <span className={"size-1.5 shrink-0 rounded-full " + item.dot} />
-                    <span className="min-w-0 flex-1">{item.text}</span>
-                    <span className="shrink-0 text-neutral-400">{item.action} →</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+            ))}
+          </p>
+        )}
       </section>
 
       <div className="mt-6 grid items-start gap-6 min-[880px]:grid-cols-5">
@@ -219,19 +163,18 @@ function Dashboard({ data }: { data: DashboardData }) {
               <h2 className="font-semibold">Follow-ups</h2>
               <div className="mt-3 divide-y divide-neutral-200 rounded-xl border border-neutral-200 bg-white">
                 {data.openFollowUps.slice(0, 6).map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/calls/${item.callId}`}
-                    className="block p-4 hover:bg-brand-50/50"
-                  >
-                    <div className="font-medium">{item.action}</div>
-                    <div className={"mt-0.5 text-sm " + (item.overdue ? "text-red-700" : "text-neutral-600")}>
-                      {item.userId}
-                      {item.owner ? ` · ${item.owner}` : ""}
-                      {item.dueDate ? ` · due ${formatDay(item.dueDate)}` : ""}
-                      {item.overdue ? " · overdue" : ""}
-                    </div>
-                  </Link>
+                  <div key={item.id} className="flex items-start justify-between gap-3 p-4">
+                    <Link href={`/calls/${item.callId}`} className="min-w-0 hover:text-brand">
+                      <div className="font-medium">{item.action}</div>
+                      <div className={"mt-0.5 text-sm " + (item.overdue ? "text-red-700" : "text-neutral-600")}>
+                        {item.userId}
+                        {item.owner ? ` · ${item.owner}` : ""}
+                        {item.dueDate ? ` · due ${formatDay(item.dueDate)}` : ""}
+                        {item.overdue ? " · overdue" : ""}
+                      </div>
+                    </Link>
+                    <FollowUpDone id={item.id} done={false} />
+                  </div>
                 ))}
               </div>
             </section>
@@ -343,93 +286,35 @@ function Dashboard({ data }: { data: DashboardData }) {
   );
 }
 
-function Stat({
-  href,
-  label,
-  value,
-  hint,
-  className = "",
-  hintClassName = "text-neutral-500",
-}: {
-  href: string;
-  label: string;
-  value: string;
-  hint: string;
-  className?: string;
-  hintClassName?: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className={"block px-4 py-4 transition-colors hover:bg-brand-50/40 sm:px-5 " + className}
-    >
-      <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">{value}</div>
-      <div className={"mt-0.5 text-sm " + hintClassName}>{hint}</div>
-    </Link>
-  );
-}
-
-function attentionItems(data: DashboardData) {
-  const items: { href: string; text: string; action: string; dot: string }[] = [];
-
-  if (data.needsReview.length > 0) {
-    const n = data.needsReview.length;
-    items.push({
-      href: n === 1 ? `/calls/${data.needsReview[0].id}` : "/calls?queue=review",
-      text: `${n} ${n === 1 ? "call still needs" : "calls still need"} review`,
-      action: "Review",
-      dot: "bg-amber-500",
-    });
-  }
-
+function weekNotes(data: DashboardData, sheetStale: boolean) {
+  const notes: { href: string; text: string }[] = [];
   if (data.readyToPublish.length > 0) {
     const n = data.readyToPublish.length;
-    items.push({
+    notes.push({
       href: n === 1 ? `/calls/${data.readyToPublish[0].id}` : "/calls?queue=publish",
-      text:
-        n === 1
-          ? `${data.readyToPublish[0].userId} is ready to publish`
-          : `${n} calls are ready to publish`,
-      action: "Publish",
-      dot: "bg-brand",
+      text: n === 1 ? "1 call ready to publish" : `${n} calls ready to publish`,
+    });
+  } else if (data.needsReview.length > 0) {
+    const n = data.needsReview.length;
+    notes.push({
+      href: n === 1 ? `/calls/${data.needsReview[0].id}` : "/calls?queue=review",
+      text: n === 1 ? "1 call still in review" : `${n} calls still in review`,
     });
   }
-
-  if (data.openFollowUps.length > 0) {
-    const overdue = data.openFollowUps.filter((item) => item.overdue).length;
-    const n = data.openFollowUps.length;
-    items.push({
-      href: `/calls/${data.openFollowUps[0].callId}`,
-      text:
-        overdue > 0
-          ? `${n} ${n === 1 ? "follow-up" : "follow-ups"} open, ${overdue} overdue`
-          : `${n} ${n === 1 ? "follow-up" : "follow-ups"} open`,
-      action: "Open",
-      dot: overdue > 0 ? "bg-red-500" : "bg-amber-500",
-    });
-  }
-
   if (data.missedPosts > 0) {
-    items.push({
+    notes.push({
       href: "/campaigns",
-      text: `${data.missedPosts} ${data.missedPosts === 1 ? "post" : "posts"} missed`,
-      action: "Campaigns",
-      dot: "bg-red-500",
+      text: data.missedPosts === 1 ? "1 post missed" : `${data.missedPosts} posts missed`,
     });
   }
-
-  if (data.snapshotAgeDays == null || data.snapshotAgeDays > 7) {
-    items.push({
+  if (sheetStale) {
+    notes.push({
       href: "/activity",
       text:
         data.snapshotDate == null
-          ? "Activity sheet has not been uploaded"
-          : `Activity sheet is ${ageLabel(data.snapshotAgeDays).toLowerCase()}`,
-      action: "Upload",
-      dot: "bg-amber-500",
+          ? "Activity sheet not uploaded"
+          : `Activity sheet ${ageLabel(data.snapshotAgeDays).toLowerCase()}`,
     });
   }
-
-  return items;
+  return notes;
 }

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getSessionUser } from "@/auth";
 import { COHORT_LABEL } from "@/lib/activity-sheet";
 import { DataError } from "@/components/DataError";
+import FollowUpDone from "@/components/FollowUpDone";
 import { databaseErrorMessage, db, schema } from "@/lib/db";
 import IssueCard from "./IssueCard";
 import PublishButton from "./PublishButton";
@@ -119,15 +120,20 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
 
       <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-4">
         <h2 className="font-medium">Follow-ups</h2>
-        <ul className="mt-2 space-y-1 text-sm">
-          {callFollowUps.map((f) => (
-            <li key={f.id}>
-              • {f.action} {f.owner && <span className="text-neutral-500">({f.owner})</span>}
-              {f.dueDate && <span className="text-neutral-500"> — due {f.dueDate}</span>}
-            </li>
-          ))}
+        <ul className="mt-2 divide-y divide-neutral-100 text-sm">
+          {[...callFollowUps]
+            .sort((a, b) => Number(a.done) - Number(b.done))
+            .map((f) => (
+              <li key={f.id} className="flex items-start justify-between gap-3 py-2">
+                <div className={f.done ? "text-neutral-400 line-through" : ""}>
+                  {f.action} {f.owner && <span className="text-neutral-500">({f.owner})</span>}
+                  {f.dueDate && <span className="text-neutral-500"> — due {f.dueDate}</span>}
+                </div>
+                {isOperator && <FollowUpDone id={f.id} done={f.done} />}
+              </li>
+            ))}
           {callFollowUps.length === 0 && (
-            <li className="text-neutral-600">No follow-ups extracted.</li>
+            <li className="py-2 text-neutral-600">No follow-ups extracted.</li>
           )}
         </ul>
       </section>

@@ -8,7 +8,7 @@ import { buildExtractPrompt, EXTRACT_PROMPT_VERSION } from "./extract-prompt";
 type Provider = "claude" | "grok";
 
 function getProvider(): Provider {
-  const p = (process.env.EXTRACT_PROVIDER ?? "claude").toLowerCase();
+  const p = (process.env.EXTRACT_PROVIDER ?? "grok").toLowerCase();
   if (p !== "claude" && p !== "grok") {
     throw new Error(`Unknown EXTRACT_PROVIDER "${p}" — expected "claude" or "grok"`);
   }

@@ -164,8 +164,22 @@ export async function publishCall(callId: string): Promise<{ error?: string }> {
   return {};
 }
 
-export async function toggleFollowUp(followUpId: string, done: boolean) {
+export async function toggleFollowUp(
+  followUpId: string,
+  done: boolean,
+): Promise<{ error?: string }> {
   await requireOperator();
-  await db.update(schema.followUps).set({ done }).where(eq(schema.followUps.id, followUpId));
-  revalidatePath("/calls");
+  try {
+    const row = await db.query.followUps.findFirst({
+      where: eq(schema.followUps.id, followUpId),
+    });
+    if (!row) return { error: "That follow-up no longer exists." };
+    await db.update(schema.followUps).set({ done }).where(eq(schema.followUps.id, followUpId));
+    revalidatePath("/");
+    revalidatePath("/calls");
+    revalidatePath(`/calls/${row.callId}`);
+    return {};
+  } catch (err) {
+    return { error: databaseErrorMessage(err) };
+  }
 }
