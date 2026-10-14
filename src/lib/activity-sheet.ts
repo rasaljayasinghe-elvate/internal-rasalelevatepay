@@ -121,6 +121,18 @@ function splitCsvLine(line: string): string[] {
 export const ACTIVE_WINDOW_DAYS = 14; // "recent activity" — confirm with analytics owner
 export const DORMANT_AFTER_DAYS = 30;
 
+export const CALL_COHORTS = ["depositors_active", "pending_kyc"] as const;
+export type CallCohort = (typeof CALL_COHORTS)[number];
+
+export const COHORT_LABEL: Record<CallCohort, string> = {
+  depositors_active: "Depositors, active",
+  pending_kyc: "Pending KYC",
+};
+
+export function isCallCohort(value: string | null | undefined): value is CallCohort {
+  return value === "depositors_active" || value === "pending_kyc";
+}
+
 export type UserActivity = "not_activated" | "activated" | "active" | "dormant";
 
 export function deriveActivity(row: ActivitySheetRow, asOf: Date = new Date()): UserActivity {

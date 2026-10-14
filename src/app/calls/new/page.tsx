@@ -31,7 +31,9 @@ export default async function NewCallPage() {
         Paste the Granola transcript, choose the user and call date. The
         transcript is redacted before anything is sent to the model (R1, R2).
       </p>
-      <NewCallForm users={users.map((u) => ({ userId: u.userId, activity: u.activity }))} />
+      <NewCallForm
+        users={users.map((u) => ({ userId: u.userId, activity: u.activity, cohort: u.cohort }))}
+      />
     </div>
   );
 }

@@ -4,7 +4,9 @@ import { db, schema } from "@/lib/db";
 import {
   parseActivityCsv,
   deriveActivity,
+  isCallCohort,
   type ActivitySheetRow,
+  type CallCohort,
   type UserActivity,
 } from "@/lib/activity-sheet";
 
@@ -15,6 +17,14 @@ export async function POST(req: Request) {
   }
 
   const form = await req.formData();
+  const cohortRaw = form.get("cohort");
+  const cohort = typeof cohortRaw === "string" && isCallCohort(cohortRaw) ? cohortRaw : null;
+  if (!cohort) {
+    return NextResponse.json(
+      { error: "Choose which list this CSV is: Depositors, active or Pending KYC." },
+      { status: 400 },
+    );
+  }
   const file = form.get("file");
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
@@ -40,7 +50,7 @@ export async function POST(req: Request) {
     const activity = deriveActivity(row);
 
     try {
-      await upsertUser(row, activity, snapshotDate);
+      await upsertUser(row, activity, cohort, snapshotDate);
       matched++;
     } catch (err) {
       console.error(`Activity sheet row ${row.userId} rejected:`, err);
@@ -48,10 +58,10 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ matched, total: rows.length, unmatched, snapshotDate });
+  return NextResponse.json({ matched, total: rows.length, unmatched, snapshotDate, cohort });
 }
 
-function upsertUser(row: ActivitySheetRow, activity: UserActivity, snapshotDate: string) {
+function upsertUser(row: ActivitySheetRow, activity: UserActivity, cohort: CallCohort, snapshotDate: string) {
   const payoutCount = row.payoutCount ? Number(row.payoutCount) : undefined;
   const fields = {
     signupDate: row.signupDate,
@@ -61,6 +71,7 @@ function upsertUser(row: ActivitySheetRow, activity: UserActivity, snapshotDate:
     payoutCount,
     lastActiveDate: row.lastActiveDate,
     activity,
+    cohort,
     snapshotDate,
   };
 

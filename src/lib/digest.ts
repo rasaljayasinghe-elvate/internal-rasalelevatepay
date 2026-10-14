@@ -1,10 +1,12 @@
 import { eq, and, gte } from "drizzle-orm";
+import { COHORT_LABEL, isCallCohort } from "./activity-sheet";
 import { db, schema } from "./db";
 
 export type DigestData = {
   periodStart: string;
   callsHeld: number;
   userMix: Record<string, number>; // activity -> count of calls
+  cohortMix: Record<string, number>; // call list -> count of calls
   stalledByStage: Record<string, number>; // onboarding stage -> count of S1/S2 issues
   notableQuotes: { quote: string; severity: string; productArea: string }[];
 };
@@ -21,9 +23,12 @@ export async function buildWeeklyDigest(): Promise<DigestData> {
     .where(and(eq(schema.calls.status, "published"), gte(schema.calls.callDate, periodStartIso)));
 
   const userMix: Record<string, number> = {};
+  const cohortMix: Record<string, number> = {};
   for (const c of calls) {
     const key = c.userActivityAtCall ?? "unknown";
     userMix[key] = (userMix[key] ?? 0) + 1;
+    const list = c.cohortAtCall && isCallCohort(c.cohortAtCall) ? COHORT_LABEL[c.cohortAtCall] : "Untagged";
+    cohortMix[list] = (cohortMix[list] ?? 0) + 1;
   }
 
   const callIds = calls.map((c) => c.id);
@@ -49,6 +54,7 @@ export async function buildWeeklyDigest(): Promise<DigestData> {
     periodStart: periodStartIso,
     callsHeld: calls.length,
     userMix,
+    cohortMix,
     stalledByStage,
     notableQuotes: notableQuotes.slice(0, 5),
   };
@@ -63,6 +69,9 @@ export function digestToMarkdown(d: DigestData): string {
     `## Calls held and user mix`,
     `${d.callsHeld} ${d.callsHeld === 1 ? "call" : "calls"}.`,
     ...Object.entries(d.userMix).map(([k, v]) => `- ${k}: ${v}`),
+    ``,
+    `## Call lists`,
+    ...Object.entries(d.cohortMix).map(([k, v]) => `- ${k}: ${v}`),
     ``,
     `## Where onboarding stalls (S1/S2 issues by funnel stage)`,
     ...Object.entries(d.stalledByStage).map(([k, v]) => `- ${k}: ${v}`),

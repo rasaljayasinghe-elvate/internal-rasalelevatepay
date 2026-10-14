@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getSessionUser } from "@/auth";
+import { COHORT_LABEL } from "@/lib/activity-sheet";
 import { DataError } from "@/components/DataError";
 import { databaseErrorMessage, db, schema } from "@/lib/db";
 import IssueCard from "./IssueCard";
@@ -63,6 +64,8 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
             {call.userId} — {call.callDate}
           </h1>
           <p className="mt-1 text-sm text-neutral-600">
+            {call.cohortAtCall ? COHORT_LABEL[call.cohortAtCall] : "No call list"}
+            {" · "}
             Activity at time of call:{" "}
             <span className="font-medium">{call.userActivityAtCall ?? "unknown"}</span>
             {user && <> · currently {user.activity}</>}

@@ -2,17 +2,20 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CALL_COHORTS, COHORT_LABEL, type CallCohort } from "@/lib/activity-sheet";
 import { createCallFromTranscript } from "@/lib/actions";
 
 type Props = {
-  users: { userId: string; activity: string }[];
+  users: { userId: string; activity: string; cohort: string | null }[];
 };
 
 export default function NewCallForm({ users }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [userId, setUserId] = useState(users[0]?.userId ?? "");
+  const [cohort, setCohort] = useState<CallCohort>("depositors_active");
+  const listed = users.filter((u) => u.cohort === cohort);
+  const [userId, setUserId] = useState(listed[0]?.userId ?? "");
   const [callDate, setCallDate] = useState(new Date().toISOString().slice(0, 10));
   const [transcript, setTranscript] = useState("");
   const [manualMasks, setManualMasks] = useState("");
@@ -25,6 +28,7 @@ export default function NewCallForm({ users }: Props) {
         const result = await createCallFromTranscript({
           userId,
           callDate,
+          cohort,
           transcript,
           manualMasks: manualMasks
             .split(",")
@@ -46,14 +50,33 @@ export default function NewCallForm({ users }: Props) {
     <form onSubmit={onSubmit} className="mt-6 space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
+          <span className="text-sm font-medium">Call list</span>
+          <select
+            value={cohort}
+            onChange={(e) => {
+              const next = e.target.value as CallCohort;
+              setCohort(next);
+              const first = users.find((u) => u.cohort === next);
+              setUserId(first?.userId ?? "");
+            }}
+            className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand-100"
+          >
+            {CALL_COHORTS.map((item) => (
+              <option key={item} value={item}>
+                {COHORT_LABEL[item]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
           <span className="text-sm font-medium">User ID</span>
-          {users.length > 0 ? (
+          {listed.length > 0 ? (
             <select
-              value={userId}
+              value={listed.some((u) => u.userId === userId) ? userId : listed[0].userId}
               onChange={(e) => setUserId(e.target.value)}
               className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand-100"
             >
-              {users.map((u) => (
+              {listed.map((u) => (
                 <option key={u.userId} value={u.userId}>
                   {u.userId} ({u.activity})
                 </option>
@@ -63,12 +86,12 @@ export default function NewCallForm({ users }: Props) {
             <input
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
-              placeholder="No users loaded yet — upload the activity sheet, or type an ID"
+              placeholder="Nobody on this list yet — upload the CSV, or type an ID"
               className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 outline-none focus:border-brand focus:ring-2 focus:ring-brand-100"
             />
           )}
         </label>
-        <label className="block">
+        <label className="block sm:col-span-2 sm:max-w-xs">
           <span className="text-sm font-medium">Call date</span>
           <input
             type="date"

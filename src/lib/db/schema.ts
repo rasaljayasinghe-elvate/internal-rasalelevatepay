@@ -57,6 +57,10 @@ export const userActivityEnum = pgEnum("user_activity", [
   "dormant",
 ]);
 
+// Which call list the person was uploaded from. Separate from activity,
+// which is derived from deposit and last-active dates.
+export const callCohortEnum = pgEnum("call_cohort", ["depositors_active", "pending_kyc"]);
+
 export const roleEnum = pgEnum("role", ["operator", "reader"]);
 
 // --- Operators / readers (people signing in to the tool) --------------
@@ -81,6 +85,7 @@ export const users = pgTable("users", {
   payoutCount: integer("payout_count"),
   lastActiveDate: date("last_active_date"),
   activity: userActivityEnum("activity").notNull().default("not_activated"),
+  cohort: callCohortEnum("cohort"),
   snapshotDate: date("snapshot_date"), // date of the activity sheet row this came from
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -101,6 +106,7 @@ export const calls = pgTable("calls", {
   sentiment: text("sentiment"),
   status: callStatusEnum("status").notNull().default("draft"),
   userActivityAtCall: userActivityEnum("user_activity_at_call"),
+  cohortAtCall: callCohortEnum("cohort_at_call"),
   extractPromptVersion: text("extract_prompt_version"),
   createdBy: text("created_by").references(() => operators.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),

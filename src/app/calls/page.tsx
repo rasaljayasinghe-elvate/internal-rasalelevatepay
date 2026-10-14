@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSessionUser } from "@/auth";
 import { DataError } from "@/components/DataError";
 import { Badge } from "@/components/fields";
+import { CALL_COHORTS, COHORT_LABEL, isCallCohort, type CallCohort } from "@/lib/activity-sheet";
 import { loadIssueCounts, reviewQueue, type ReviewQueue } from "@/lib/dashboard";
 import { databaseErrorMessage, db } from "@/lib/db";
 
@@ -26,13 +27,22 @@ const FILTERS: { queue: ReviewQueue | null; label: string }[] = [
   { queue: "published", label: "Published" },
 ];
 
+function callsHref(queue: ReviewQueue | null, cohort: CallCohort | null) {
+  const params = new URLSearchParams();
+  if (queue) params.set("queue", queue);
+  if (cohort) params.set("cohort", cohort);
+  const query = params.toString();
+  return query ? `/calls?${query}` : "/calls";
+}
+
 export default async function CallsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ queue?: string }>;
+  searchParams: Promise<{ queue?: string; cohort?: string }>;
 }) {
-  const { queue } = await searchParams;
+  const { queue, cohort: cohortParam } = await searchParams;
   const filter = queue === "review" || queue === "publish" || queue === "published" ? queue : null;
+  const cohort = isCallCohort(cohortParam) ? cohortParam : null;
   const user = await getSessionUser();
   let calls: Awaited<ReturnType<typeof db.query.calls.findMany>> = [];
   let issueCounts = new Map<string, { pending: number; total: number }>();
@@ -50,9 +60,14 @@ export default async function CallsPage({
     const issues = issueCounts.get(call.id) ?? { pending: 0, total: 0 };
     return { call, queue: reviewQueue(call.status, issues.pending, issues.total) };
   });
-  const counts: Record<ReviewQueue, number> = { review: 0, publish: 0, published: 0 };
-  for (const row of rows) counts[row.queue] += 1;
-  const shown = filter ? rows.filter((row) => row.queue === filter) : rows;
+  const inList = cohort ? rows.filter((row) => row.call.cohortAtCall === cohort) : rows;
+  const shown = filter ? inList.filter((row) => row.queue === filter) : inList;
+  const cohortCounts = Object.fromEntries(CALL_COHORTS.map((item) => [item, 0])) as Record<CallCohort, number>;
+  for (const row of rows) {
+    if (row.call.cohortAtCall && isCallCohort(row.call.cohortAtCall)) {
+      cohortCounts[row.call.cohortAtCall] += 1;
+    }
+  }
 
   return (
     <div>
@@ -72,7 +87,7 @@ export default async function CallsPage({
         {FILTERS.map((item) => (
           <Link
             key={item.label}
-            href={item.queue ? `/calls?queue=${item.queue}` : "/calls"}
+            href={callsHref(item.queue, cohort)}
             className={
               "rounded-md px-3 py-1 transition-colors " +
               (filter === item.queue
@@ -80,7 +95,35 @@ export default async function CallsPage({
                 : "text-neutral-600 hover:bg-neutral-100 hover:text-navy")
             }
           >
-            {item.label} ({item.queue ? counts[item.queue] : rows.length})
+            {item.label} ({item.queue ? inList.filter((row) => row.queue === item.queue).length : inList.length})
+          </Link>
+        ))}
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-2 text-sm">
+        <Link
+          href={callsHref(filter, null)}
+          className={
+            "rounded-md px-3 py-1 transition-colors " +
+            (!cohort
+              ? "bg-brand-50 font-medium text-brand"
+              : "text-neutral-600 hover:bg-neutral-100 hover:text-navy")
+          }
+        >
+          Both lists ({rows.length})
+        </Link>
+        {CALL_COHORTS.map((item) => (
+          <Link
+            key={item}
+            href={callsHref(filter, item)}
+            className={
+              "rounded-md px-3 py-1 transition-colors " +
+              (cohort === item
+                ? "bg-brand-50 font-medium text-brand"
+                : "text-neutral-600 hover:bg-neutral-100 hover:text-navy")
+            }
+          >
+            {COHORT_LABEL[item]} ({cohortCounts[item]})
           </Link>
         ))}
       </div>
@@ -94,7 +137,11 @@ export default async function CallsPage({
       <div className="mt-4 divide-y divide-neutral-200 rounded-xl border border-neutral-200 bg-white">
         {shown.length === 0 && !loadError && (
           <p className="p-4 text-sm text-neutral-600">
-            {rows.length === 0 ? "No calls yet." : "Nothing in this queue."}
+            {rows.length === 0
+              ? "No calls yet."
+              : inList.length === 0
+                ? "No calls on this list."
+                : "Nothing in this queue."}
           </p>
         )}
         {shown.map(({ call, queue: callQueue }) => (
@@ -106,6 +153,9 @@ export default async function CallsPage({
             <div className="min-w-0">
               <div className="font-medium">
                 {call.userId} — {call.callDate}
+                {call.cohortAtCall && (
+                  <span className="font-normal text-neutral-500"> · {COHORT_LABEL[call.cohortAtCall]}</span>
+                )}
               </div>
               <div className="mt-0.5 line-clamp-1 text-sm text-neutral-600">
                 {call.summary ?? "No summary"}

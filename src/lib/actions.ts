@@ -4,7 +4,7 @@ import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { requireOperator } from "@/auth";
-import { toIsoDate } from "./activity-sheet";
+import { isCallCohort, toIsoDate, type CallCohort } from "./activity-sheet";
 import { databaseErrorMessage, db, schema } from "./db";
 import { redact, applyManualMasks, summarizeRedactions } from "./redact";
 import { extract } from "./extract";
@@ -14,6 +14,7 @@ export type CreateCallInput = {
   userId: string;
   callDate: string; // ISO date
   transcript: string;
+  cohort?: string;
   manualMasks?: string[];
 };
 
@@ -30,6 +31,7 @@ export async function createCallFromTranscript(
   if (!input.transcript.trim()) return { error: "Transcript is empty." };
   const callDate = toIsoDate(input.callDate);
   if (!callDate) return { error: "Call date must be a real date." };
+  const chosenCohort: CallCohort | null = isCallCohort(input.cohort) ? input.cohort : null;
 
   const { masked, matches } = redact(input.transcript);
   const fullyMasked = input.manualMasks?.length
@@ -55,9 +57,13 @@ export async function createCallFromTranscript(
 
   const callId = randomUUID();
   try {
-    // Users not yet in the activity sheet still need a row for the calls FK.
+    // The uploaded list wins. A typed id with no row yet is filed under the list
+    // chosen on the form, so the call is never left ungrouped.
+    const cohortAtCall = user?.cohort ?? chosenCohort;
     if (!user) {
-      await db.insert(schema.users).values({ userId }).onConflictDoNothing();
+      await db.insert(schema.users).values({ userId, cohort: cohortAtCall }).onConflictDoNothing();
+    } else if (!user.cohort && cohortAtCall) {
+      await db.update(schema.users).set({ cohort: cohortAtCall }).where(eq(schema.users.userId, userId));
     }
 
     await db.insert(schema.calls).values({
@@ -72,6 +78,7 @@ export async function createCallFromTranscript(
       sentiment: result.extraction.sentiment,
       status: "draft",
       userActivityAtCall: user?.activity ?? "not_activated",
+      cohortAtCall,
       extractPromptVersion: result.promptVersion,
       createdBy: null,
     });

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DataError } from "@/components/DataError";
+import { COHORT_LABEL } from "@/lib/activity-sheet";
 import { Badge } from "@/components/fields";
 import {
   CAMPAIGN_STATUS_LABEL,
@@ -198,7 +199,10 @@ function Dashboard({ data }: { data: DashboardData }) {
                   <div className="min-w-0">
                     <div className="font-medium">
                       {call.userId}{" "}
-                      <span className="font-normal text-neutral-500">· {formatDay(call.callDate)}</span>
+                      <span className="font-normal text-neutral-500">
+                        · {formatDay(call.callDate)}
+                        {call.cohortAtCall ? ` · ${COHORT_LABEL[call.cohortAtCall]}` : ""}
+                      </span>
                     </div>
                     <div className="mt-0.5 line-clamp-1 text-sm text-neutral-600">
                       {call.summary ?? "No summary yet"}

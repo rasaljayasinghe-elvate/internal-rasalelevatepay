@@ -17,6 +17,7 @@ export type DashboardCall = {
   callDate: string;
   summary: string | null;
   status: string;
+  cohortAtCall: "depositors_active" | "pending_kyc" | null;
   pendingIssues: number;
   issueCount: number;
   queue: ReviewQueue;
@@ -127,6 +128,7 @@ export async function loadDashboard(): Promise<DashboardData> {
           callDate: schema.calls.callDate,
           summary: schema.calls.summary,
           status: schema.calls.status,
+          cohortAtCall: schema.calls.cohortAtCall,
           createdAt: schema.calls.createdAt,
         })
         .from(schema.calls)
@@ -170,6 +172,7 @@ export async function loadDashboard(): Promise<DashboardData> {
       callDate: call.callDate,
       summary: call.summary,
       status: call.status,
+      cohortAtCall: call.cohortAtCall,
       pendingIssues: issues.pending,
       issueCount: issues.total,
       queue: reviewQueue(call.status, issues.pending, issues.total),
