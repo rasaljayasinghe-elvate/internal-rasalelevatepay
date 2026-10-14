@@ -76,8 +76,10 @@ export const operators = pgTable("operators", {
 // --- End users of Elevate Pay (joined from the weekly activity sheet) -
 
 export const users = pgTable("users", {
-  // Elevate Pay user ID — the join key with the weekly activity sheet
+  // Elevate Pay user ID when the sheet has one. An email-only row uses the
+  // email address here so the call can still point at a person.
   userId: text("user_id").primaryKey(),
+  email: text("email").unique(),
   signupDate: date("signup_date"),
   kycStatus: text("kyc_status"),
   firstDepositDate: date("first_deposit_date"),

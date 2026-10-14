@@ -5,6 +5,7 @@
 
 export type ActivitySheetRow = {
   userId: string;
+  email?: string;
   signupDate?: string;
   kycStatus?: string;
   firstDepositDate?: string;
@@ -12,6 +13,9 @@ export type ActivitySheetRow = {
   payoutCount?: string;
   lastActiveDate?: string;
 };
+
+const USER_ID_HEADERS = ["user_id", "userid"];
+const EMAIL_HEADERS = ["email", "e_mail", "user_email", "email_address", "mail"];
 
 const EXPECTED_HEADERS = [
   "user_id",
@@ -23,34 +27,50 @@ const EXPECTED_HEADERS = [
   "last_active_date",
 ] as const;
 
+function normalizeHeader(header: string): string {
+  return header.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+export function normalizeEmail(value: string | undefined): string | undefined {
+  const email = value?.trim().toLowerCase();
+  if (!email || !email.includes("@")) return undefined;
+  return email;
+}
+
 export function parseActivityCsv(csv: string): ActivitySheetRow[] {
   const lines = csv.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length === 0) return [];
 
-  const header = splitCsvLine(lines[0]).map((h) => h.trim().toLowerCase());
-  const missing = EXPECTED_HEADERS.filter((h) => h !== "user_id" && !header.includes(h));
-  if (!header.includes("user_id")) {
-    throw new Error('Activity sheet CSV must have a "user_id" column.');
+  const header = splitCsvLine(lines[0]).map(normalizeHeader);
+  const userIdHeader = USER_ID_HEADERS.find((name) => header.includes(name));
+  const emailHeader = EMAIL_HEADERS.find((name) => header.includes(name));
+  if (!userIdHeader && !emailHeader) {
+    throw new Error('Activity sheet CSV needs an "email" or a "user_id" column.');
   }
+  const missing = EXPECTED_HEADERS.filter((h) => h !== "user_id" && !header.includes(h));
   if (missing.length > 0) {
     // Not fatal — just means some fields will be left null for every row.
     console.warn(`Activity sheet CSV is missing columns: ${missing.join(", ")}`);
   }
 
-  return lines.slice(1).map((line) => {
-    const cells = splitCsvLine(line);
-    const row: Record<string, string> = {};
-    header.forEach((h, i) => (row[h] = cells[i]?.trim() ?? ""));
-    return {
-      userId: row.user_id,
-      signupDate: toIsoDate(row.signup_date),
-      kycStatus: row.kyc_status || undefined,
-      firstDepositDate: toIsoDate(row.first_deposit_date),
-      totalDeposited: toNumeric(row.total_deposited),
-      payoutCount: toInteger(row.payout_count),
-      lastActiveDate: toIsoDate(row.last_active_date),
-    };
-  }).filter((r) => r.userId);
+  return lines
+    .slice(1)
+    .map((line) => {
+      const cells = splitCsvLine(line);
+      const row: Record<string, string> = {};
+      header.forEach((h, i) => (row[h] = cells[i]?.trim() ?? ""));
+      return {
+        userId: userIdHeader ? row[userIdHeader] : "",
+        email: emailHeader ? normalizeEmail(row[emailHeader]) : undefined,
+        signupDate: toIsoDate(row.signup_date),
+        kycStatus: row.kyc_status || undefined,
+        firstDepositDate: toIsoDate(row.first_deposit_date),
+        totalDeposited: toNumeric(row.total_deposited),
+        payoutCount: toInteger(row.payout_count),
+        lastActiveDate: toIsoDate(row.last_active_date),
+      };
+    })
+    .filter((r) => r.userId || r.email);
 }
 
 // Sheets exports formatted numbers ("$1,500.00"); Postgres numeric wants "1500.00".

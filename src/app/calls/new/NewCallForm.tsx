@@ -6,7 +6,7 @@ import { CALL_COHORTS, COHORT_LABEL, type CallCohort } from "@/lib/activity-shee
 import { createCallFromTranscript } from "@/lib/actions";
 
 type Props = {
-  users: { userId: string; activity: string; cohort: string | null }[];
+  users: { userId: string; email: string | null; activity: string; cohort: string | null }[];
 };
 
 export default function NewCallForm({ users }: Props) {
@@ -78,7 +78,8 @@ export default function NewCallForm({ users }: Props) {
             >
               {listed.map((u) => (
                 <option key={u.userId} value={u.userId}>
-                  {u.userId} ({u.activity})
+                  {u.email && u.email !== u.userId ? `${u.email} · ${u.userId}` : (u.email ?? u.userId)} (
+                  {u.activity})
                 </option>
               ))}
             </select>

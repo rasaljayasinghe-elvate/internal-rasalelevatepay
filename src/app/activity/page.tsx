@@ -29,10 +29,10 @@ export default async function ActivityPage({
     <div>
       <h1 className="text-2xl font-bold tracking-tight">Weekly activity sheet</h1>
       <p className="mt-1 text-sm text-neutral-600">
-        Export each tab as CSV with columns: user_id, signup_date, kyc_status,
-        first_deposit_date, total_deposited, payout_count, last_active_date.
-        Pick the list before uploading. A later upload of the same user id moves
-        them onto that list. Rows are matched by <code>user_id</code>.
+        Each tab needs an email or a user id. Other columns are optional:
+        signup_date, kyc_status, first_deposit_date, total_deposited,
+        payout_count, last_active_date. Pick the list before uploading. A later
+        upload of the same email or user id moves them onto that list.
       </p>
       {loadError && (
         <div className="mt-4">
@@ -59,7 +59,7 @@ export default async function ActivityPage({
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-neutral-500">
             <tr>
-              <th className="p-2">User ID</th>
+              <th className="p-2">User</th>
               <th className="p-2">List</th>
               <th className="p-2">Activity</th>
               <th className="p-2">First deposit</th>
@@ -72,7 +72,12 @@ export default async function ActivityPage({
               .filter((u) => !cohort || u.cohort === cohort)
               .map((u) => (
               <tr key={u.userId} className="border-t border-neutral-100">
-                <td className="p-2 font-mono">{u.userId}</td>
+                <td className="p-2">
+                  <div>{u.email ?? u.userId}</div>
+                  {u.email && u.email !== u.userId && (
+                    <div className="font-mono text-xs text-neutral-500">{u.userId}</div>
+                  )}
+                </td>
                 <td className="p-2">{u.cohort ? COHORT_LABEL[u.cohort] : "—"}</td>
                 <td className="p-2">{u.activity}</td>
                 <td className="p-2">{u.firstDepositDate ?? "—"}</td>

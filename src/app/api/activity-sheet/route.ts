@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { getSessionUser } from "@/auth";
 import { db, schema } from "@/lib/db";
 import {
@@ -46,24 +47,42 @@ export async function POST(req: Request) {
   const unmatched: string[] = [];
 
   for (const row of rows) {
-    if (!row.userId) continue;
+    const userId = await resolveUserId(row);
+    if (!userId) continue;
     const activity = deriveActivity(row);
+    const label = row.email ?? userId;
 
     try {
-      await upsertUser(row, activity, cohort, snapshotDate);
+      await upsertUser(userId, row, activity, cohort, snapshotDate);
       matched++;
     } catch (err) {
-      console.error(`Activity sheet row ${row.userId} rejected:`, err);
-      unmatched.push(row.userId);
+      console.error(`Activity sheet row ${label} rejected:`, err);
+      unmatched.push(label);
     }
   }
 
   return NextResponse.json({ matched, total: rows.length, unmatched, snapshotDate, cohort });
 }
 
-function upsertUser(row: ActivitySheetRow, activity: UserActivity, cohort: CallCohort, snapshotDate: string) {
+async function resolveUserId(row: ActivitySheetRow): Promise<string | null> {
+  if (row.userId) return row.userId;
+  if (!row.email) return null;
+  const existing = await db.query.users.findFirst({
+    where: eq(schema.users.email, row.email),
+  });
+  return existing?.userId ?? row.email;
+}
+
+function upsertUser(
+  userId: string,
+  row: ActivitySheetRow,
+  activity: UserActivity,
+  cohort: CallCohort,
+  snapshotDate: string,
+) {
   const payoutCount = row.payoutCount ? Number(row.payoutCount) : undefined;
   const fields = {
+    ...(row.email ? { email: row.email } : {}),
     signupDate: row.signupDate,
     kycStatus: row.kycStatus,
     firstDepositDate: row.firstDepositDate,
@@ -77,7 +96,7 @@ function upsertUser(row: ActivitySheetRow, activity: UserActivity, cohort: CallC
 
   return db
     .insert(schema.users)
-    .values({ userId: row.userId, ...fields })
+    .values({ userId, ...fields })
     .onConflictDoUpdate({
       target: schema.users.userId,
       set: { ...fields, updatedAt: new Date() },

@@ -32,7 +32,12 @@ export default async function NewCallPage() {
         transcript is redacted before anything is sent to the model (R1, R2).
       </p>
       <NewCallForm
-        users={users.map((u) => ({ userId: u.userId, activity: u.activity, cohort: u.cohort }))}
+        users={users.map((u) => ({
+          userId: u.userId,
+          email: u.email,
+          activity: u.activity,
+          cohort: u.cohort,
+        }))}
       />
     </div>
   );
